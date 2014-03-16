@@ -1,0 +1,10 @@
+LOG_FILENAME = "log.txt"
+TCP_PORT = 20000
+UDP_PORT = 20001
+MAX_LISTEN_COUNT = 1024
+
+BROADCAST_TIMEOUT = 5 # in sec
+BROADCAST_DELAY = 60 # in msec
+
+SERVER_MESSAGE = "I am main server."
+MESSAGE_FROM_RUNNING = "I am started."
