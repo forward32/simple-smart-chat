@@ -1,11 +1,16 @@
 """
-This is server part for application
+This is network part of apllication
 """
 from socket import *
-from simple_logger import log
-from defines import *
-import sys
+import simple_logger as LOGGER
+import sys, os
+from imp import reload
+import defines as DEF
+reload(DEF)
+reload(LOGGER)
 import time
+import select
+import threading
 
 ##########################LOGIC#####################################
 def CreateUDPSock():
@@ -16,40 +21,41 @@ def CreateUDPSock():
         sock = socket(AF_INET, SOCK_DGRAM)
         sock.setsockopt(SOL_SOCKET, SO_BROADCAST,1)
 
-    except error:
-        msg = "Can not create socket. Function:" + CreateUDPSock.__name__
-        log(msg, LOG_FILENAME)
+    except error as e:
+        msg = "Can not create socket. Function:" + CreateUDPSock.__name__+"\nError:" + str(e)
+        LOGGER.log(msg, DEF.LOG_FILENAME)
         sys.exit(-1)
 
     return sock
 
 def CreateTCPSockServer(_port):
     """
-    This function creates TCP socket
+    This function creates TCP socket for server
     """
     try:
         sock = socket(AF_INET, SOCK_STREAM)
         sock.setsockopt(SOL_SOCKET, SO_REUSEADDR,1)
         sock.bind(("", _port))
-        sock.listen(MAX_LISTEN_COUNT)
+        sock.listen(DEF.MAX_LISTEN_COUNT)
 
-    except error:
+    except error as e:
         msg = "Can not create socket. Function:" + CreateTCPSockServer.__name__
-        log(msg, LOG_FILENAME)
+        msg += "\nError:" + str(e)
+        LOGGER.log(msg, DEF.LOG_FILENAME)
         sys.exit(-1)
 
     return sock
 
 def CreateTCPSockClient(_port):
     """
-    This function creates TCP socket
+    This function creates TCP socket for client
     """
     try:
         sock = socket(AF_INET, SOCK_STREAM)
 
-    except error:
-        msg = "Can not create socket. Function:" + CreateTCPSockClient().__name__
-        log(msg, LOG_FILENAME)
+    except error as e:
+        msg = "Can not create socket. Function:" + CreateTCPSockClient().__name__+"\nError:" + str(e)
+        LOGGER.log(msg, DEF.LOG_FILENAME)
         sys.exit(-1)
 
     return sock
@@ -59,20 +65,88 @@ def ReadData(fd):
     Read data from socket fd
     """
     result = ""
-    while True:
-        result += fd.recv(1024)
+    try:
+        stop = False
+        while not stop:
+            tmp_str = fd.recv(1024).decode('utf-8')
+            if not tmp_str:
+                stop = True
+            if IsEndOfMessage(tmp_str):
+                result += tmp_str.split('\0')[0].replace('\0\0', '\0')
+                stop = True
+            else:
+                result += tmp_str.split('\0')[0].replace('\0\0', '\0')
 
-    return result.decode('utf-8')
+    except error as e:
+        msg = "There are error. Function:" + ReadData.__name__ + "\nError:" + str(e)
+        LOGGER.log(msg, DEF.LOG_FILENAME)
+        return ""
+
+    return result
 
 def WriteData(fd, msg):
     """
     Write data into socket fd
     """
-    while (len(msg)>0):
-        written = fd.send(msg.encode('utf-8'))
-        msg = msg[written:]
+    try:
+        msg = CheckString(msg)
+        while len(msg)>0:
+            written = fd.send(msg.encode('utf-8'))
+            if written <= 0:
+                #server is dead
+                break
+            msg = msg[written:]
+    except error as e:
+        msg = "There are error. Function:" + WriteData.__name__ + "\nError:" + str(e)
+        LOGGER.log(msg, DEF.LOG_FILENAME)
+        return False
 
-    return true
+    return True
+
+def CheckString(old_str):
+    """
+    This function checks old_str and replaces symbol '\0' on '\0\0'
+    """
+    result = ""
+    for i in range(len(old_str)):
+        if old_str[i] == '\0':
+            result += '\0'+'\0'
+        else:
+            result += old_str[i]
+
+    return result+'\0'
+
+def IsEndOfMessage(old_str):
+    """
+    This function checks old_str and if old_str contains '\0' and next symbol after '\0'
+    not equal '\0' or if '\0' is last symbol in string than returns True
+    """
+    i = 0
+    while i < len(old_str):
+        if old_str[i] == '\0':
+            if i == len(old_str)-1:
+                return True
+            elif old_str[i+1] != '\0':
+                return True
+            elif old_str[i+1] == '\0':
+                i+=2
+        i+=1
+
+    return False
+
+def MassMailing(message):
+    """
+    This function sends message for all clients
+    """
+    if not message:
+        LOGGER.log ("Message is empty. Function:" +MassMailing.__name__, DEF.LOG_FILENAME)
+    else:
+        global connections
+        for key in connections.keys():
+            if not WriteData(connections[key], message):
+                LOGGER.log("Bad WriteData into sock with fd "+str(key), DEF.LOG_FILENAME)
+
+        LOGGER.log ("Sending message complete. Function:" + MassMailing.__name__, DEF.LOG_FILENAME)
 
 def SendBroadcast(msg, _port, fd):
     """
@@ -80,9 +154,12 @@ def SendBroadcast(msg, _port, fd):
     """
     try:
         fd.sendto(msg.encode('utf-8'), ("255.255.255.255", _port))
-    except error:
-        msg = "Sendto failed. Function:" + SendBroadcast.__name__
-        log(msg, LOG_FILENAME)
+    except error as e:
+        msg = "Sendto failed. Function:" + SendBroadcast.__name__ + "\nError:" + str(e)
+        LOGGER.log(msg, DEF.LOG_FILENAME)
+        if str(e) == "[Errno 101] Network is unreachable":
+            LOGGER.print_test("Network is unreachable.")
+            OnDeadProgram()
 
 def MainServerBroadcast(msg, _port, fd):
     """
@@ -91,7 +168,9 @@ def MainServerBroadcast(msg, _port, fd):
     """
     while True:
         SendBroadcast(msg, _port, fd)
-        time.sleep(BROADCAST_DELAY)
+        time.sleep(DEF.BROADCAST_DELAY)
+
+    LOGGER.print_test("Exit main broad")
 
 def ListenUdpPort(_port):
     """
@@ -107,15 +186,28 @@ def ListenUdpPort(_port):
         sock.close()
         return lst
 
-    except error:
-        msg = "Socket error. Function:" + ListenUdpPort.__name__
-        log(msg, LOG_FILENAME)
-
-    finally:
+    except error as e:
+        msg = "Socket error. Function:" + ListenUdpPort.__name__ + "\nError:" + str(e)
+        LOGGER.log(msg, DEF.LOG_FILENAME)
         sock.close()
 
     return []
 
+def ListenTCPSock(fd):
+    """
+    This function listen tcp socket fd and return old post
+    """
+    try:
+        while True:
+            reading_data = ReadData(fd)
+            if reading_data:
+                LOGGER.print_test(">>"+reading_data+"\n")
+            else:
+                LOGGER.log("Server is dead. Function:"+ListenTCPSock.__name__, DEF.LOG_FILENAME)
+                break
+
+    except error as e:
+        LOGGER.log ("There are error. Function:" + ListenTCPSock.__name__ + "\nError:" + str(e), DEF.LOG_FILENAME)
 
 def CheckWhoMainServer(_port, fd):
     """
@@ -123,50 +215,123 @@ def CheckWhoMainServer(_port, fd):
     Else it will be main server.
     """
     try:
-        stop_at = time.time() + BROADCAST_TIMEOUT
+        stop_at = time.time() + DEF.BROADCAST_TIMEOUT
         while time.time() < stop_at:
-            SendBroadcast(MESSAGE_FROM_RUNNING, _port, fd)
+            SendBroadcast(DEF.MESSAGE_FROM_RUNNING, _port, fd)
             lst = ListenUdpPort(_port)
-            if (lst and lst[0]==SERVER_MESSAGE):
+            if (lst and lst[0]==DEF.SERVER_MESSAGE):
                 global server_addr
                 server_addr = lst[1]
                 global tcp_sock
-                print(server_addr[0])
-                tcp_sock.connect((server_addr[0], TCP_PORT))
+                tcp_sock.connect((server_addr[0], DEF.TCP_PORT))
                 return False
 
     except error as e:
-        msg = "Can not connect socket. Function:" + CheckWhoMainServer.__name__
-        msg += "\nError:" + str(e)
-        log(msg, LOG_FILENAME)
-
+        msg = "Can not connect socket. Function:" + CheckWhoMainServer.__name__+"\nError:" + str(e)
+        LOGGER.log(msg, DEF.LOG_FILENAME)
+        sys.exit(-1)
 
     return True
+
+def StartingEpoll(server, epoll_sock):
+    """
+    This function creates epoll and monitoring all socket in epoll + adds new sockets + removes dead sockets
+    """
+    epoll_sock.register(server.fileno(), select.EPOLLIN)
+
+    try:
+        global connections
+        while True:
+            if not epoll_sock:
+                break
+            events = epoll_sock.poll(1)
+            for fileno, event in events:
+                if fileno == server.fileno():
+                    try:
+                        conn, addr = server.accept()
+                        conn.setblocking(True)
+                        epoll_sock.register(conn.fileno(), select.EPOLLIN)
+                        connections[conn.fileno()] = conn
+                        LOGGER.log("Add client. Function:"+StartingEpoll.__name__, DEF.LOG_FILENAME)
+                    except error:
+                        pass
+
+                elif event & select.EPOLLIN:
+                    reading_data = ReadData(connections[fileno])
+                    if not reading_data:
+                        epoll_sock.unregister(fileno)
+                        connections[fileno].shutdown(SHUT_RDWR)
+                        connections[fileno].close()
+                        del connections[fileno]
+                        LOGGER.log("One client is disconnected. Function:" + StartingEpoll.__name__, DEF.LOG_FILENAME)
+                        LOGGER.print_test("Clien disconnected.")
+                        continue
+                    LOGGER.print_test(">>"+reading_data+"\n")
+                    MassMailing(reading_data)
+
+    except error as e:
+        msg = "There are errors. Function:" + StartingEpoll.__name__+"\nError:" + str(e)
+        LOGGER.log(msg, DEF.LOG_FILENAME)
+    finally:
+        epoll_sock.unregister(server.fileno())
+        epoll_sock.close()
+        server.close()
+    LOGGER.print_test("Exit epoll")
+
+def OnDeadProgram():
+    """
+    It is destructor for program
+    """
+    global connections, tcp_sock, udp_sock, epoll_sock, server_addr
+    udp_sock.close()
+    tcp_sock.shutdown(SHUT_RDWR)
+    tcp_sock.close()
+    epoll_sock.close()
+    del connections, server_addr, tcp_sock, udp_sock, epoll_sock
+    LOGGER.log("Bye-bye...", DEF.LOG_FILENAME)
+    sys.exit(0)
+
 ####################################################################
 
 
-#############################TESTING################################
+#######################DATA FOR SERVER##############################
+connections = {}
+server_addr = ()
+udp_sock = CreateUDPSock()
+tcp_sock = CreateTCPSockClient(DEF.TCP_PORT)
+epoll_sock = select.epoll()
+####################################################################
 if __name__=="__main__":
-    #######################DATA FOR SERVER##############################
-    сonnections = {} # this is dictionary; key = fd, value = connection
-    server_addr = () # server address
-    udp_sock = CreateUDPSock()
-    tcp_sock = CreateTCPSockClient(TCP_PORT)
-    ####################################################################
     try:
-        if (udp_sock and tcp_sock):
-            print("Success.")
+        LOGGER.log("Now i kill you!", DEF.LOG_FILENAME)
+        os.remove(DEF.LOG_FILENAME)
 
-        #while True:
-        #    SendBroadcast(SERVER_MESSAGE, UDP_PORT, udp_sock)
-        if CheckWhoMainServer(UDP_PORT, udp_sock):
-            print("Good")
+        if CheckWhoMainServer(DEF.UDP_PORT, udp_sock):
+            LOGGER.log("I main server", DEF.LOG_FILENAME)
+            # Create broadcast-thread
+            thread_broadcast = threading.Thread(target=MainServerBroadcast, args=(DEF.SERVER_MESSAGE, DEF.UDP_PORT, udp_sock))
+            thread_broadcast.daemon = True
+            thread_broadcast.start()
+            LOGGER.print_test("Thread broadcast started.")
+            # Create epoll-listener-thread
+            tcp_sock = CreateTCPSockServer(DEF.TCP_PORT)
+            thread_epoll = threading.Thread(target=StartingEpoll, args=(tcp_sock, epoll_sock))
+            thread_epoll.deamon = True
+            thread_epoll.start()
+            LOGGER.print_test("Thread epoll started.")
         else:
-            print("Bad")
+            # create tcp-socket-listener-thread
+            tcp_sock.setblocking(True)
+            thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock,))
+            thread_listener.start()
+            LOGGER.print_test("Thread listener started.")
+            LOGGER.print_test("Type message for sending or type 0 for exit:")
+            while True:
+                msg = input()
+                WriteData(tcp_sock, msg)
 
     except KeyboardInterrupt:
-        print("Normal exit.")
-        udp_sock.close()
-        tcp_sock.close()
-        sys.exit(0)
+        LOGGER.print_test("Cleaning up...")
+        OnDeadProgram()
+
 

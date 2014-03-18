@@ -5,7 +5,10 @@ def log(msg, filename):
     """
     f = open(filename,"a")
     if (f):
-        f.write(msg+"\n")
+        f.write(msg+"\n\n")
         f.close()
     else:
         print("Operation failed.")
+
+def print_test(msg):
+    print (msg)
