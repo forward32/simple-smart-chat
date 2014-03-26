@@ -1,5 +1,5 @@
 """
-This is network part of apllication
+This is main file of application
 """
 from socket import *
 import sys, os
@@ -9,10 +9,13 @@ import defines as DEF
 reload(DEF)
 reload(LOGGER)
 import time
+import datetime
 import select
 import threading
-
+import config_parser as PARSER
+####################################################################
 ##########################LOGIC#####################################
+####################################################################
 def CreateUDPSock():
     """
     This function creates UDP socket
@@ -274,18 +277,31 @@ def OnDeadProgram():
     LOGGER.log("Bye-bye...", DEF.LOG_FILENAME)
     sys.exit(0)
 
+def GetStartingTime():
+	"""
+	This function saves current date and current time into string.
+	Program will be call this function when she starting..
+	"""
+	now_date = datetime.date.today()
+	now_time = datetime.datetime.now()
+	
+	return (str(now_date.year)+"#"+str(now_date.month)+"#"+str(now_date.day)+"#"+
+		    str(now_time.hour)+"#"+str(now_time.minute)+"#"+str(now_time.second))
+####################################################################
+####################################################################
 ####################################################################
 
-
-#######################DATA FOR SERVER##############################
-connections = {}
-server_addr = ()
-udp_sock = CreateUDPSock()
-tcp_sock = CreateTCPSockClient(DEF.TCP_PORT)
-epoll_sock = select.epoll()
-user_exit = False
-####################################################################
 if __name__=="__main__":
+    PARSER.ParseConfig("configuration.cfg")
+    #######################DATA FOR SERVER##############################
+    connections = {}
+    server_addr = ()
+    udp_sock = CreateUDPSock()
+    tcp_sock = CreateTCPSockClient(DEF.TCP_PORT)
+    epoll_sock = select.epoll()
+    user_exit = False
+    date_of_starting = GetStartingTime()
+    ####################################################################
     try:
         LOGGER.log("Now i kill you!", DEF.LOG_FILENAME)
         os.remove(DEF.LOG_FILENAME)

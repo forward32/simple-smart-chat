@@ -11,4 +11,8 @@ def log(msg, filename):
         print("Operation failed.")
 
 def print_test(msg):
+    """
+    It is simple print, but me need print_test,
+    because in future i can delete all print_test in code.
+    """
     print (msg)
