@@ -30,22 +30,24 @@ def ParseConfig(file_name):
 
     dictionary = CreateWordsDict(f.readlines())
     for key in dictionary:
-        if key == "TCP_PORT":
+        if key.lower() == "tcp_port":
             defines.TCP_PORT = int(dictionary[key])
-        elif key == "UDP_PORT":
+        elif key.lower() == "udp_port":
             defines.UDP_PORT = int(dictionary[key])
-        elif key == "LOG_NAME":
+        elif key.lower() == "log_name":
             defines.LOG_FILENAME = str(dictionary[key])
-        elif key == "MAX_LISTENERS":
+        elif key.lower() == "max_listeners":
             defines.MAX_LISTEN_COUNT = int(dictionary[key])
-        elif key == "BROADCAST_TIMEOUT":
+        elif key.lower() == "broadcast_timeout":
             defines.BROADCAST_TIMEOUT = float(dictionary[key])
-        elif key == "BROADCAST_DELAY":
+        elif key.lower() == "broadcast_delay":
             defines.BROADCAST_DELAY = float(dictionary[key])
-        elif key == "SERVER_MESSAGE":
+        elif key.lower() == "server_message":
             defines.SERVER_MESSAGE = str(dictionary[key])
-        elif key == "MESSAGE_FROM_RUNNING":
+        elif key.lower() == "message_from_running":
             defines.MESSAGE_FROM_RUNNING  =str(dictionary[key])
+        elif key.lower() == "candidate_mesage":
+            defines.CANDIDATE_MESSAGE = str(dictionary[key])
 
 
 if __name__=="__main__":
