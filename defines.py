@@ -4,7 +4,7 @@ from simple_logger import print_test
 # Values is default. They can be changed in module config_parser
 LOG_FILENAME = "log.txt"
 TCP_PORT = 20000
-UDP_PORT_TO = 20001
+UDP_PORT = 20001
 MAX_LISTEN_COUNT = 1024
 
 BROADCAST_TIMEOUT = 5 # in sec

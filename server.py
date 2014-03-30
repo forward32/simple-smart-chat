@@ -26,8 +26,7 @@ def CreateUDPSock():
         sock.setsockopt(SOL_SOCKET, SO_BROADCAST,1)
 
     except error as e:
-        msg = "Can not create socket. Function:" + CreateUDPSock.__name__+"\nError:" + str(e)
-        LOGGER.log(msg, DEF.LOG_FILENAME)
+        LOGGER.log("Can not create socket. Function:" + CreateUDPSock.__name__+"\nError:" + str(e), DEF.LOG_FILENAME)
         sys.exit(-1)
 
     return sock
@@ -72,11 +71,13 @@ def ReadData(fd):
             tmp_str = fd.recv(1024).decode('utf-8')
             if not tmp_str:
                 stop = True
-            if IsEndOfMessage(tmp_str):
-                result += tmp_str.split('\0')[0].replace('\0\0', '\0')
-                stop = True
             else:
-                result += tmp_str.split('\0')[0].replace('\0\0', '\0')
+                index = GetEndOfMessage(tmp_str)
+                if index != -1:
+                    result += tmp_str[:index].replace('\0\0','\0')
+                    stop = True
+                else:
+                    result += tmp_str.replace('\0\0', '\0')
 
     except error as e:
         LOGGER.log("Can't read data from server. Function:" + ReadData.__name__ + "\nError:" + str(e), DEF.LOG_FILENAME)
@@ -90,7 +91,6 @@ def WriteData(fd, msg):
     else - True.
     """
     try:
-        global is_main
         msg = CheckString(msg)
         while len(msg)>0:
             written = fd.send(msg.encode('utf-8'))
@@ -115,7 +115,7 @@ def CheckString(old_str):
 
     return result + '\0'
 
-def IsEndOfMessage(old_str):
+def GetEndOfMessage(old_str):
     """
     This function checks old_str and if old_str contains '\0' and next symbol after '\0'
     not equal '\0' or if '\0' is last symbol in string than returns True.
@@ -124,14 +124,14 @@ def IsEndOfMessage(old_str):
     while i < len(old_str):
         if old_str[i] == '\0':
             if i == len(old_str)-1:
-                return True
+                return i
             elif old_str[i+1] != '\0':
-                return True
+                return i
             elif old_str[i+1] == '\0':
-                i+=2
+                i+=1
         i+=1
 
-    return False
+    return -1
 
 def MassMailing(message):
     """
@@ -140,7 +140,7 @@ def MassMailing(message):
     if not message:
         LOGGER.log ("Message is empty. Function:" +MassMailing.__name__, DEF.LOG_FILENAME)
     else:
-        global connections, is_main
+        global connections
         for key in connections.keys():
             if not WriteData(connections[key], message):
                 LOGGER.log("Bad WriteData into sock with fd "+str(key), DEF.LOG_FILENAME)
@@ -176,7 +176,6 @@ def GetDateStructFromMessage(message, sep_msg, sep_date):
     This function return date(yyyy#mm#dd#hh#mm#ss) from message
     """
     temp_lst = message.strip().split(sep_msg)
-
     return temp_lst[len(temp_lst)-1]
 
 def CompareDates(one_date, two_date):
@@ -221,7 +220,6 @@ def CaptureOfPower(_port, fd):
             stop_at = time.time() + DEF.BROADCAST_TIMEOUT
             while time.time() < stop_at:
                 lst = ListenUdpPort(_port)
-                LOGGER.print_test(lst)
                 if lst and lst[0]==DEF.SERVER_MESSAGE:
                     server_addr = lst[1]
                     tcp_sock = CreateTCPSockClient(DEF.TCP_PORT)
@@ -267,7 +265,9 @@ def ListenUdpPort(_port):
         (msg, addr) = sock.recvfrom(1024)
         lst = [msg.decode('utf-8'), addr]
         sock.close()
+
         return lst
+
     except error as e:
         sock.close()
         LOGGER.log("Error in function " + ListenUdpPort.__name__ + ".\nError:" + str(e), DEF.LOG_FILENAME)
@@ -365,7 +365,7 @@ def GetStartingTime():
 	now_time = datetime.datetime.now()
 	
 	return (str(now_date.year)+"#"+str(now_date.month)+"#"+str(now_date.day)+"#"+
-		    str(now_time.hour)+"#"+str(now_time.minute)+"#"+str(now_time.second))
+	        str(now_time.hour)+"#"+str(now_time.minute)+"#"+str(now_time.second))
 
 def OnDeadProgram():
     """
@@ -376,7 +376,6 @@ def OnDeadProgram():
     tcp_sock.shutdown(1)
     tcp_sock.close()
     epoll_sock.close()
-    #del connections, server_addr, tcp_sock, udp_sock, epoll_sock
     LOGGER.log("Bye-bye...", DEF.LOG_FILENAME)
     exit(0)
 ####################################################################
