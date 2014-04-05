@@ -14,6 +14,8 @@ SERVER_MESSAGE = "I am main server."
 MESSAGE_FROM_RUNNING = "I am started."
 CANDIDATE_MESSAGE = "I will be the main."
 
+ROOMS_LIST_SEND_MESSAGE = "LIST_OF_ROOMS"
+
 def TraceDump():
     """
     This function prints all variables in stdout
@@ -27,6 +29,7 @@ def TraceDump():
     print_test("SRV_MSG:"+SERVER_MESSAGE)
     print_test("MSG_CLNT:"+MESSAGE_FROM_RUNNING)
     print_test("CNDT_MSG:"+CANDIDATE_MESSAGE)
+    print_test("ROOMS_MSG:"+ROOMS_LIST_SEND_MESSAGE)
 
 if __name__=="__main__":
     TraceDump()

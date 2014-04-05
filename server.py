@@ -133,19 +133,44 @@ def GetEndOfMessage(old_str):
 
     return -1
 
-def MassMailing(message):
+def ListenUdpPort(_port):
     """
-    This function sends message for all clients.
+    This funcion listen port _port and return old post.
     """
-    if not message:
-        LOGGER.log ("Message is empty. Function:" +MassMailing.__name__, DEF.LOG_FILENAME)
-    else:
-        global connections
-        for key in connections.keys():
-            if not WriteData(connections[key], message):
-                LOGGER.log("Bad WriteData into sock with fd "+str(key), DEF.LOG_FILENAME)
+    try:
+        sock = CreateUDPSock()
+        sock.bind(("", _port))
+        sock.settimeout(DEF.BROADCAST_TIMEOUT)
 
-        LOGGER.log ("Sending message complete. Function:" + MassMailing.__name__, DEF.LOG_FILENAME)
+        (msg, addr) = sock.recvfrom(1024)
+        lst = [msg.decode('utf-8'), addr]
+        sock.close()
+
+        return lst
+
+    except error as e:
+        LOGGER.log("Warning in function " + ListenUdpPort.__name__ + ".\nWarning:" + str(e), DEF.LOG_FILENAME)
+
+def ListenTCPSock(fd):
+    """
+    This function listen tcp socket fd and return old post.
+    """
+    global tcp_sock, user_exit, udp_sock, is_main
+    while not user_exit:
+        reading_data = ReadData(fd)
+        if reading_data:
+            LOGGER.print_test(">>"+reading_data+"\n")
+        else:
+            if not user_exit:
+                LOGGER.log("Server is dead. Function:"+ListenTCPSock.__name__, DEF.LOG_FILENAME)
+                LOGGER.print_test("Server is dead.")
+            break
+
+    # if here - server is died
+    if not user_exit:
+        CaptureOfPower(DEF.UDP_PORT, udp_sock)
+    else:
+        LOGGER.print_test("Thread-listener stopped.")
 
 def SendBroadcast(msg, _port, fd):
     """
@@ -155,9 +180,9 @@ def SendBroadcast(msg, _port, fd):
         fd.sendto(msg.encode('utf-8'), ("255.255.255.255", _port))
     except error as e:
         LOGGER.log("Sendto failed. Function:" + SendBroadcast.__name__ + "\nError:" + str(e), DEF.LOG_FILENAME)
-        if str(e) == "[Errno 101] Network is unreachable":
+        if "Errno 101" in str(e):
             LOGGER.print_test("Network is unreachable.")
-            OnDeadProgram()
+            sys.exit(-1)
 
 def MainServerBroadcast(msg, _port, fd):
     """
@@ -171,27 +196,54 @@ def MainServerBroadcast(msg, _port, fd):
 
     LOGGER.print_test("Thread-broadcast stopped")
 
-def GetDateStructFromMessage(message, sep_msg, sep_date):
+def MassMailing(message, room):
     """
-    This function return date(yyyy#mm#dd#hh#mm#ss) from message
+    This function sends message for all clients.
     """
-    temp_lst = message.strip().split(sep_msg)
-    return temp_lst[len(temp_lst)-1]
+    if not message:
+        LOGGER.log ("Message is empty. Function:" +MassMailing.__name__, DEF.LOG_FILENAME)
+    else:
+        global connections, rooms
+        for key in connections.keys():
+            if room == rooms[key]:
+                if not WriteData(connections[key], message):
+                    LOGGER.log("Bad WriteData into sock with fd "+str(key), DEF.LOG_FILENAME)
 
-def CompareDates(one_date, two_date):
-    """
-    This function compares two dates in format yyyy#mm#dd#hh#mm#ss
-    and returns true if one_date less two_date.
-    """
-    str1 = one_date.strip().split('#')
-    str2 = two_date.strip().split('#')
+        LOGGER.log ("Sending message complete. Function:" + MassMailing.__name__, DEF.LOG_FILENAME)
 
-    if (int(str1[0])<=int(str2[0]) and int(str1[1])<=int(str2[1]) and
-       int(str1[2])<=int(str2[2]) and int(str1[3])<=int(str2[3]) and
-       int(str1[4])<=int(str2[4]) and int(str1[5])<=int(str2[5])):
-           return True
+def SendListRooms(room_lst, client_sock):
+    """
+    This function sends to client list of available rooms.
+    """
+    WriteData(client_sock, DEF.ROOMS_LIST_SEND_MESSAGE)
+    LOGGER.print_test("Send LIST_BEGIN")
+    for i in room_lst:
+        WriteData(client_sock, room_lst[i])
+        LOGGER.print_test("Send "+str(room_lst[i])+" room-name.")
+    WriteData(client_sock, DEF.ROOMS_LIST_SEND_MESSAGE+"-END")
+    LOGGER.print_test("Send LIST_END")
 
-    return False
+def GetListOfRooms(fd):
+    """
+    This function for client.
+    Reading list available rooms from fd.
+    """
+    try:
+        reading_data = ReadData(fd)
+        LOGGER.print_test("Step 1:"+reading_data)
+        if reading_data == DEF.ROOMS_LIST_SEND_MESSAGE:
+            lst = []
+            while True:
+                reading_data = ReadData(fd)
+                LOGGER.print_test("Step 2:"+reading_data)
+                if not reading_data or reading_data == DEF.ROOMS_LIST_SEND_MESSAGE+"-END":
+                    break
+                else:
+                    lst.append(reading_data)
+            # lst is available rooms on server
+            LOGGER.print_test(lst)
+    except error as e:
+        LOGGER.log("Error in function" + GetListOfRooms.__name__, "\nError:"+str(e), DEF.LOG_FILENAME)
 
 def CaptureOfPower(_port, fd):
     """
@@ -199,6 +251,7 @@ def CaptureOfPower(_port, fd):
     fd - udp socket. _port - udp port.
     """
     try:
+        LOGGER.print_test("In capture of power.")
         stop_at = time.time() + DEF.BROADCAST_TIMEOUT
         global date_of_starting, tcp_sock, epoll_sock, is_main, server_addr
         tcp_sock.shutdown(1)
@@ -244,53 +297,8 @@ def CaptureOfPower(_port, fd):
         thread_epoll.start()
         LOGGER.print_test("Thread-epoll started.")
 
-        #while not user_exit:
-        #    LOGGER.print_test("MAIN. Type message for sending or type 0 for exit:")
-        #    msg = input()
-        #    LOGGER.print_test(">>"+msg+"\n")
-        #    MassMailing(msg)
     except error as e:
         LOGGER.log("Error in function " + CaptureOfPower.__name__ + ".\nError:" + str(e), DEF.LOG_FILENAME)
-
-
-def ListenUdpPort(_port):
-    """
-    This funcion listen port _port and return old post.
-    """
-    try:
-        sock = CreateUDPSock()
-        sock.bind(("", _port))
-        sock.settimeout(DEF.BROADCAST_TIMEOUT)
-
-        (msg, addr) = sock.recvfrom(1024)
-        lst = [msg.decode('utf-8'), addr]
-        sock.close()
-
-        return lst
-
-    except error as e:
-        sock.close()
-        LOGGER.log("Error in function " + ListenUdpPort.__name__ + ".\nError:" + str(e), DEF.LOG_FILENAME)
-
-def ListenTCPSock(fd):
-    """
-    This function listen tcp socket fd and return old post.
-    """
-    global tcp_sock, user_exit, udp_sock, is_main
-    while not user_exit:
-        reading_data = ReadData(fd)
-        if reading_data:
-            LOGGER.print_test(">>"+reading_data+"\n")
-        else:
-            if not user_exit:
-                LOGGER.log("Server is dead. Function:"+ListenTCPSock.__name__, DEF.LOG_FILENAME)
-                LOGGER.print_test("Server is dead.")
-            break
-
-    # if here - server is died
-    if not user_exit:
-        CaptureOfPower(DEF.UDP_PORT, udp_sock)
-
 
 def CheckWhoMainServer(_port, fd):
     """
@@ -298,7 +306,7 @@ def CheckWhoMainServer(_port, fd):
     Else it will be main client.
     """
     try:
-        global server_addr, tcp_sock
+        global server_addr, tcp_sock, room_name
         stop_at = time.time() + DEF.BROADCAST_TIMEOUT
         while time.time() < stop_at:
             SendBroadcast(DEF.MESSAGE_FROM_RUNNING, _port, fd)
@@ -306,10 +314,14 @@ def CheckWhoMainServer(_port, fd):
             if lst and lst[0]==DEF.SERVER_MESSAGE:
                 server_addr = lst[1]
                 tcp_sock.connect((server_addr[0], DEF.TCP_PORT))
+                LOGGER.print_test("begin...")
+                GetListOfRooms(tcp_sock) # this function get list of rooms from server
+                LOGGER.print_test("end...")
+                WriteData(tcp_sock, room_name) # send room name to server
                 return False
 
     except error as e:
-        LOGGER.log("Can not connect socket. Function:" + CheckWhoMainServer.__name__+"\nError:" + str(e), DEF.LOG_FILENAME)
+        LOGGER.log("Can't connect socket. Function:" + CheckWhoMainServer.__name__+"\nError:" + str(e), DEF.LOG_FILENAME)
         sys.exit(-1)
 
     return True
@@ -322,62 +334,104 @@ def StartingEpoll(server, epoll_sock):
     epoll_sock.register(server.fileno(), select.EPOLLIN)
 
     try:
-        global connections, is_main
+        global connections, is_main, rooms, room_name
+        rooms[server.fileno()] = room_name
         while is_main:
             if not epoll_sock:
                 break
             events = epoll_sock.poll(1)
             for fileno, event in events:
                 if fileno == server.fileno():
-                    try:
-                        conn, addr = server.accept()
-                        conn.setblocking(True)
-                        epoll_sock.register(conn.fileno(), select.EPOLLIN)
-                        connections[conn.fileno()] = conn
-                        LOGGER.log("Add client. Function:"+StartingEpoll.__name__, DEF.LOG_FILENAME)
-                        LOGGER.print_test("Add client.")
-                    except error:
-                        pass
+                    conn, addr = server.accept()
+                    conn.setblocking(True)
+                    epoll_sock.register(conn.fileno(), select.EPOLLIN)
+                    connections[conn.fileno()] = conn
+                    # send list of rooms to client
+                    SendListRooms(rooms, conn)
+                    # reading room-name here
+                    reading_data = ReadData(conn)
+                    rooms[conn.fileno()] = reading_data.strip()
+                    LOGGER.log("Add client. Function:"+StartingEpoll.__name__, DEF.LOG_FILENAME)
+                    LOGGER.print_test("Client connected.")
+                    #LOGGER.print_test("Room:"+reading_data)
 
                 elif event & select.EPOLLIN:
+                    LOGGER.print_test("EpollIn:")
                     reading_data = ReadData(connections[fileno])
                     if not reading_data:
                         epoll_sock.unregister(fileno)
-                        connections[fileno].shutdown(1)
-                        connections[fileno].close()
-                        del connections[fileno]
+                        if fileno in list(connections.keys()):
+                            LOGGER.print_test("Cleaning after disconnecting.")
+                            connections[fileno].shutdown(1)
+                            connections[fileno].close()
+                            del connections[fileno]
+                        if fileno in list(rooms.keys()):
+                            del rooms[fileno]
                         LOGGER.log("One client is disconnected. Function:" + StartingEpoll.__name__, DEF.LOG_FILENAME)
+                        LOGGER.print_test("Client disconnected.")
+                        LOGGER.print_test("Clients:"+str(len(connections.keys())))
                         continue
-                    LOGGER.print_test(">>"+reading_data+"\n")
-                    MassMailing(reading_data)
+                    # if room client and your room is equal
+                    if rooms[server.fileno()] == rooms[fileno]:
+                        LOGGER.print_test(">>"+reading_data+"\n")
+                    else:
+                        LOGGER.print_test("Rooms not equal.")
+                    MassMailing(reading_data, rooms[fileno])
 
     except error as e:
         LOGGER.log("There are errors. Function:" + StartingEpoll.__name__+"\nError:" + str(e), DEF.LOG_FILENAME)
     finally:
-        LOGGER.print_test("Thread-epoll stopped")
+        LOGGER.print_test("Thread-epoll stopped.")
 
 def GetStartingTime():
-	"""
-	This function saves current date and current time into string.
-	Program will be call this function when she starting.
-	"""
-	now_date = datetime.date.today()
-	now_time = datetime.datetime.now()
-	
-	return (str(now_date.year)+"#"+str(now_date.month)+"#"+str(now_date.day)+"#"+
-	        str(now_time.hour)+"#"+str(now_time.minute)+"#"+str(now_time.second))
+    """
+    This function saves current date and current time into string.
+    Program will be call this function when she starting.
+    """
+    now_date = datetime.date.today()
+    now_time = datetime.datetime.now()
+
+    return (str(now_date.year)+"#"+str(now_date.month)+"#"+str(now_date.day)+"#"+
+            str(now_time.hour)+"#"+str(now_time.minute)+"#"+str(now_time.second))
+
+def GetDateStructFromMessage(message, sep_msg, sep_date):
+    """
+    This function return date(yyyy#mm#dd#hh#mm#ss) from message
+    """
+    temp_lst = message.strip().split(sep_msg)
+    return temp_lst[len(temp_lst)-1]
+
+def CompareDates(one_date, two_date):
+    """
+    This function compares two dates in format yyyy#mm#dd#hh#mm#ss
+    and returns true if one_date less two_date.
+    """
+    str1 = one_date.strip().split('#')
+    str2 = two_date.strip().split('#')
+
+    if (int(str1[0])<=int(str2[0]) and int(str1[1])<=int(str2[1]) and
+       int(str1[2])<=int(str2[2]) and int(str1[3])<=int(str2[3]) and
+       int(str1[4])<=int(str2[4]) and int(str1[5])<=int(str2[5])):
+           return True
+
+    return
 
 def OnDeadProgram():
     """
     It is destructor for program.
     """
-    global connections, tcp_sock, udp_sock, epoll_sock, server_addr
-    udp_sock.close()
-    tcp_sock.shutdown(1)
-    tcp_sock.close()
-    epoll_sock.close()
-    LOGGER.log("Bye-bye...", DEF.LOG_FILENAME)
-    exit(0)
+    try:
+        global connections, tcp_sock, udp_sock, epoll_sock, server_addr, rooms
+        udp_sock.close()
+        tcp_sock.shutdown(1)
+        tcp_sock.close()
+        epoll_sock.close()
+        del connections, rooms, udp_sock, tcp_sock, epoll_sock
+        LOGGER.log("Bye-bye...", DEF.LOG_FILENAME)
+        LOGGER.print_test("Cleaning finished.")
+        exit(0)
+    except error as e:
+        LOGGER.log("Warning in function" + OnDeadProgram.__name__+"\nWarning:"+str(e),DEF.LOG_FILENAME)
 ####################################################################
 ####################################################################
 ####################################################################
@@ -386,6 +440,7 @@ if __name__=="__main__":
     PARSER.ParseConfig("configuration.cfg")
     #######################DATA FOR SERVER##############################
     connections = {}
+    rooms = {}
     server_addr = ()
     udp_sock = CreateUDPSock()
     tcp_sock = CreateTCPSockClient(DEF.TCP_PORT)
@@ -393,6 +448,7 @@ if __name__=="__main__":
     user_exit = False
     date_of_starting = GetStartingTime()
     is_main = False
+    room_name = "friends"
     ####################################################################
     try:
         LOGGER.log("Now i kill you!", DEF.LOG_FILENAME)
@@ -414,10 +470,6 @@ if __name__=="__main__":
 
             while threading.active_count() > 1:
                 time.sleep(0.5)
-            #    LOGGER.print_test("MAIN.Type message for sending or type 0 for exit:")
-            #    msg = input()
-            #    LOGGER.print_test(">>"+msg+"\n")
-            #    MassMailing(msg)
         else:
             # create tcp-socket-listener-thread
             tcp_sock.setblocking(True)
@@ -426,10 +478,12 @@ if __name__=="__main__":
             LOGGER.print_test("Thread-listener started.")
             LOGGER.print_test("NOT_MAIN.Type message for sending or type 0 for exit:")
 
-            while not is_main:
+            while not is_main and not user_exit:
                 msg = input()
                 if msg:
                     WriteData(tcp_sock, msg)
+                else:
+                    LOGGER.print_test("Message is empty.")
 
     except:
         user_exit = True
