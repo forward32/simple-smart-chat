@@ -48,6 +48,10 @@ def ParseConfig(file_name):
             defines.MESSAGE_FROM_RUNNING  =str(dictionary[key])
         elif key.lower() == "candidate_mesage":
             defines.CANDIDATE_MESSAGE = str(dictionary[key])
+        elif key.lower() == "my_color":
+            defines.MY_COLOR = str(dictionary[key])
+        elif key.lower() == "other_color":
+            defines.OTHER_COLOR= str(dictionary[key])
 
 
 if __name__=="__main__":

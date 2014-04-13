@@ -15,6 +15,8 @@ MESSAGE_FROM_RUNNING = "I am started."
 CANDIDATE_MESSAGE = "I will be the main."
 
 ROOMS_LIST_SEND_MESSAGE = "LIST_OF_ROOMS"
+MY_COLOR = "#0000FF"
+OTHER_COLOR = "#FF0000"
 
 def TraceDump():
     """
@@ -30,6 +32,8 @@ def TraceDump():
     print_test("MSG_CLNT:"+MESSAGE_FROM_RUNNING)
     print_test("CNDT_MSG:"+CANDIDATE_MESSAGE)
     print_test("ROOMS_MSG:"+ROOMS_LIST_SEND_MESSAGE)
+    print_test("My_CLR:"+MY_COLOR)
+    print_test("OTHER_CLR:"+OTHER_COLOR)
 
 if __name__=="__main__":
     TraceDump()

@@ -13,6 +13,7 @@ import datetime
 import select
 import threading
 import config_parser as PARSER
+from PyQt4 import QtCore, QtGui, uic
 ####################################################################
 ##########################LOGIC#####################################
 ####################################################################
@@ -60,21 +61,34 @@ def CreateTCPSockClient(_port):
 
     return sock
 
+static_str="" # only for function ReadData
 def ReadData(fd):
     """
     Read data from socket fd.
     """
-    result = ""
+    global static_str
     try:
+        result = ""
+        index = -1
+        if static_str:
+            index = GetEndOfMessage(static_str)
+            if index != -1:
+                result = static_str[:index].replace('\0\0','\0')
+                static_str = static_str[index+1:]
+                return result
+            else:
+                result = static_str
+
         stop = False
         while not stop:
-            tmp_str = fd.recv(1024).decode('utf-8')
+            tmp_str = fd.recv(256).decode('utf-8')
             if not tmp_str:
                 stop = True
             else:
                 index = GetEndOfMessage(tmp_str)
                 if index != -1:
                     result += tmp_str[:index].replace('\0\0','\0')
+                    static_str = tmp_str[index+1:]
                     stop = True
                 else:
                     result += tmp_str.replace('\0\0', '\0')
@@ -151,7 +165,7 @@ def ListenUdpPort(_port):
     except error as e:
         LOGGER.log("Warning in function " + ListenUdpPort.__name__ + ".\nWarning:" + str(e), DEF.LOG_FILENAME)
 
-def ListenTCPSock(fd):
+def ListenTCPSock(fd, window):
     """
     This function listen tcp socket fd and return old post.
     """
@@ -159,7 +173,7 @@ def ListenTCPSock(fd):
     while not user_exit:
         reading_data = ReadData(fd)
         if reading_data:
-            LOGGER.print_test(">>"+reading_data+"\n")
+            AppendString(reading_data)
         else:
             if not user_exit:
                 LOGGER.log("Server is dead. Function:"+ListenTCPSock.__name__, DEF.LOG_FILENAME)
@@ -168,7 +182,7 @@ def ListenTCPSock(fd):
 
     # if here - server is died
     if not user_exit:
-        CaptureOfPower(DEF.UDP_PORT, udp_sock)
+        CaptureOfPower(DEF.UDP_PORT, udp_sock, window)
     else:
         LOGGER.print_test("Thread-listener stopped.")
 
@@ -181,7 +195,8 @@ def SendBroadcast(msg, _port, fd):
     except error as e:
         LOGGER.log("Sendto failed. Function:" + SendBroadcast.__name__ + "\nError:" + str(e), DEF.LOG_FILENAME)
         if "Errno 101" in str(e):
-            LOGGER.print_test("Network is unreachable.")
+            global window
+            QtGui.QMessageBox.about(window, "Информация", "Нет соединения с интернетом.")
             sys.exit(-1)
 
 def MainServerBroadcast(msg, _port, fd):
@@ -216,12 +231,9 @@ def SendListRooms(room_lst, client_sock):
     This function sends to client list of available rooms.
     """
     WriteData(client_sock, DEF.ROOMS_LIST_SEND_MESSAGE)
-    LOGGER.print_test("Send LIST_BEGIN")
     for i in room_lst:
         WriteData(client_sock, room_lst[i])
-        LOGGER.print_test("Send "+str(room_lst[i])+" room-name.")
     WriteData(client_sock, DEF.ROOMS_LIST_SEND_MESSAGE+"-END")
-    LOGGER.print_test("Send LIST_END")
 
 def GetListOfRooms(fd):
     """
@@ -230,12 +242,10 @@ def GetListOfRooms(fd):
     """
     try:
         reading_data = ReadData(fd)
-        LOGGER.print_test("Step 1:"+reading_data)
         if reading_data == DEF.ROOMS_LIST_SEND_MESSAGE:
             lst = []
             while True:
                 reading_data = ReadData(fd)
-                LOGGER.print_test("Step 2:"+reading_data)
                 if not reading_data or reading_data == DEF.ROOMS_LIST_SEND_MESSAGE+"-END":
                     break
                 else:
@@ -245,7 +255,7 @@ def GetListOfRooms(fd):
     except error as e:
         LOGGER.log("Error in function" + GetListOfRooms.__name__, "\nError:"+str(e), DEF.LOG_FILENAME)
 
-def CaptureOfPower(_port, fd):
+def CaptureOfPower(_port, fd, window):
     """
     Client will be call this function if server died.
     fd - udp socket. _port - udp port.
@@ -253,7 +263,7 @@ def CaptureOfPower(_port, fd):
     try:
         LOGGER.print_test("In capture of power.")
         stop_at = time.time() + DEF.BROADCAST_TIMEOUT
-        global date_of_starting, tcp_sock, epoll_sock, is_main, server_addr
+        global date_of_starting, tcp_sock, epoll_sock, is_main, server_addr, room_name
         tcp_sock.shutdown(1)
         tcp_sock.close()
         msg = DEF.CANDIDATE_MESSAGE+"MY_TIME="+date_of_starting
@@ -278,8 +288,10 @@ def CaptureOfPower(_port, fd):
                     tcp_sock = CreateTCPSockClient(DEF.TCP_PORT)
                     tcp_sock.setblocking(True)
                     tcp_sock.connect((server_addr[0], DEF.TCP_PORT))
+                    GetListOfRooms(tcp_sock) # this function get list of rooms from server
+                    WriteData(tcp_sock, room_name) # send room name to server
                     LOGGER.print_test("Connected to the new main client.")
-                    thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock,))
+                    thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock, window))
                     thread_listener.start()
                     LOGGER.print_test("Thread-listener started.")
                     return False
@@ -293,7 +305,7 @@ def CaptureOfPower(_port, fd):
         thread_broadcast.start()
         LOGGER.print_test("Thread-broadcast started.")
         # Create epoll-listener-thread
-        thread_epoll = threading.Thread(target=StartingEpoll, args=(tcp_sock, epoll_sock))
+        thread_epoll = threading.Thread(target=StartingEpoll, args=(tcp_sock, epoll_sock, window))
         thread_epoll.start()
         LOGGER.print_test("Thread-epoll started.")
 
@@ -314,9 +326,7 @@ def CheckWhoMainServer(_port, fd):
             if lst and lst[0]==DEF.SERVER_MESSAGE:
                 server_addr = lst[1]
                 tcp_sock.connect((server_addr[0], DEF.TCP_PORT))
-                LOGGER.print_test("begin...")
                 GetListOfRooms(tcp_sock) # this function get list of rooms from server
-                LOGGER.print_test("end...")
                 WriteData(tcp_sock, room_name) # send room name to server
                 return False
 
@@ -326,7 +336,7 @@ def CheckWhoMainServer(_port, fd):
 
     return True
 
-def StartingEpoll(server, epoll_sock):
+def StartingEpoll(server, epoll_sock, window):
     """
     This function creates epoll and monitoring all socket in epoll +
     adds new sockets + removes dead sockets.
@@ -352,11 +362,9 @@ def StartingEpoll(server, epoll_sock):
                     reading_data = ReadData(conn)
                     rooms[conn.fileno()] = reading_data.strip()
                     LOGGER.log("Add client. Function:"+StartingEpoll.__name__, DEF.LOG_FILENAME)
-                    LOGGER.print_test("Client connected.")
-                    #LOGGER.print_test("Room:"+reading_data)
+                    window.edt_chat.append(str("==>Один клиент подключился"))
 
                 elif event & select.EPOLLIN:
-                    LOGGER.print_test("EpollIn:")
                     reading_data = ReadData(connections[fileno])
                     if not reading_data:
                         epoll_sock.unregister(fileno)
@@ -368,12 +376,11 @@ def StartingEpoll(server, epoll_sock):
                         if fileno in list(rooms.keys()):
                             del rooms[fileno]
                         LOGGER.log("One client is disconnected. Function:" + StartingEpoll.__name__, DEF.LOG_FILENAME)
-                        LOGGER.print_test("Client disconnected.")
-                        LOGGER.print_test("Clients:"+str(len(connections.keys())))
+                        window.edt_chat.append(str("<==Один клиент отключился"))
                         continue
                     # if room client and your room is equal
                     if rooms[server.fileno()] == rooms[fileno]:
-                        LOGGER.print_test(">>"+reading_data+"\n")
+                        AppendString(reading_data)
                     else:
                         LOGGER.print_test("Rooms not equal.")
                     MassMailing(reading_data, rooms[fileno])
@@ -432,12 +439,46 @@ def OnDeadProgram():
         exit(0)
     except error as e:
         LOGGER.log("Warning in function" + OnDeadProgram.__name__+"\nWarning:"+str(e),DEF.LOG_FILENAME)
+
+
+#---------------------------User interface------------------
+def SendMessageSlot(window, tcp_sock):
+    global room_name, user_name
+    message = user_name+": "+window.edt_msg.toPlainText()
+    if not message:
+        QtGui.QMessageBox.about(window, "Информация","Сообщение пустое.\nПожалуйста, введите сообщение в поле ввода и повторите попытку.")
+    #--if you is main client--
+    elif is_main:
+        AppendString(message)
+        MassMailing(message, room_name)
+    #--if you is not main client--
+    else:
+        WriteData(tcp_sock, message)
+    window.edt_msg.clear()
+
+def CloseSlot():
+    LOGGER.print_test("Exit clicked.")
+    global user_exit, is_main
+    user_exit = True
+    is_main = False
+    OnDeadProgram()
+
+def AppendString(msg):
+    global user_name, window
+    nickname = msg.split(':')[0]
+    message = msg[len(nickname):]
+    if nickname == user_name:
+        window.edt_chat.append(str("<font color="+DEF.MY_COLOR+"><b>"+nickname+"</b></font color="+DEF.MY_COLOR+">"+message))
+    else:
+         window.edt_chat.append(str("<font color="+DEF.OTHER_COLOR+"><b>"+nickname+"</b></font color="+DEF.OTHER_COLOR+">"+message))
+#-------------------------------------------------------------------
 ####################################################################
 ####################################################################
 ####################################################################
 
 if __name__=="__main__":
     PARSER.ParseConfig("configuration.cfg")
+    DEF.TraceDump()
     #######################DATA FOR SERVER##############################
     connections = {}
     rooms = {}
@@ -449,11 +490,28 @@ if __name__=="__main__":
     date_of_starting = GetStartingTime()
     is_main = False
     room_name = "friends"
+    user_name = ""
     ####################################################################
     try:
         LOGGER.log("Now i kill you!", DEF.LOG_FILENAME)
         os.remove(DEF.LOG_FILENAME)
 
+        #-- create ui here
+        app = QtGui.QApplication(sys.argv)
+        window = uic.loadUi("gui.ui")
+
+        window.edt_chat.setReadOnly(True)
+        window.edt_msg.setFocus()
+        window.btn_send.clicked.connect(lambda:SendMessageSlot(window, tcp_sock))
+        window.btn_exit.clicked.connect(CloseSlot)
+
+        #--get nickname here--
+        while not user_name:
+            user_name, ok = QtGui.QInputDialog.getText(window, 'Ввод ника', 'Введите ваше имя или прозвище:')
+            if not ok:
+                sys.exit(0)
+
+        #--find main server(client)
         if CheckWhoMainServer(DEF.UDP_PORT, udp_sock):
             is_main = True
             LOGGER.log("I main client", DEF.LOG_FILENAME)
@@ -464,26 +522,18 @@ if __name__=="__main__":
             # Create epoll-listener-thread
             tcp_sock.close()
             tcp_sock = CreateTCPSockServer(DEF.TCP_PORT)
-            thread_epoll = threading.Thread(target=StartingEpoll, args=(tcp_sock, epoll_sock))
+            thread_epoll = threading.Thread(target=StartingEpoll, args=(tcp_sock, epoll_sock, window))
             thread_epoll.start()
             LOGGER.print_test("Thread-epoll started.")
-
-            while threading.active_count() > 1:
-                time.sleep(0.5)
         else:
             # create tcp-socket-listener-thread
             tcp_sock.setblocking(True)
-            thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock,))
+            thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock,window))
             thread_listener.start()
             LOGGER.print_test("Thread-listener started.")
-            LOGGER.print_test("NOT_MAIN.Type message for sending or type 0 for exit:")
 
-            while not is_main and not user_exit:
-                msg = input()
-                if msg:
-                    WriteData(tcp_sock, msg)
-                else:
-                    LOGGER.print_test("Message is empty.")
+        window.show()
+        sys.exit(app.exec_())
 
     except:
         user_exit = True
