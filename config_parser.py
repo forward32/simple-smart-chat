@@ -52,6 +52,8 @@ def ParseConfig(file_name):
             defines.MY_COLOR = str(dictionary[key])
         elif key.lower() == "other_color":
             defines.OTHER_COLOR= str(dictionary[key])
+        elif key.lower() == "buf_flag":
+            defines.BUF_FLAG= int(dictionary[key])
 
 
 if __name__=="__main__":

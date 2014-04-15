@@ -17,6 +17,10 @@ CANDIDATE_MESSAGE = "I will be the main."
 ROOMS_LIST_SEND_MESSAGE = "LIST_OF_ROOMS"
 MY_COLOR = "#0000FF"
 OTHER_COLOR = "#FF0000"
+STATUS_FREE = "Available"
+STATUS_BUSY = "Busy"
+BUF_FLAG = 1
+MAX_BUFFER_SIZE = 512
 
 def TraceDump():
     """
@@ -34,6 +38,8 @@ def TraceDump():
     print_test("ROOMS_MSG:"+ROOMS_LIST_SEND_MESSAGE)
     print_test("My_CLR:"+MY_COLOR)
     print_test("OTHER_CLR:"+OTHER_COLOR)
+    print_test("BUF_FLG:"+str(BUF_FLAG))
+    print_test("BUF_SIZE:"+str(MAX_BUFFER_SIZE))
 
 if __name__=="__main__":
     TraceDump()

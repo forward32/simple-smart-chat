@@ -169,11 +169,20 @@ def ListenTCPSock(fd, window):
     """
     This function listen tcp socket fd and return old post.
     """
-    global tcp_sock, user_exit, udp_sock, is_main
+    global tcp_sock, user_exit, udp_sock, is_main, status, message_buf
     while not user_exit:
         reading_data = ReadData(fd)
+
         if reading_data:
-            AppendString(reading_data)
+            if DEF.BUF_FLAG == 1:
+                if status == DEF.STATUS_BUSY:
+                    if len(message_buf) > DEF.MAX_BUFFER_SIZE:
+                        message_buf.clear()
+                        LOGGER.print_test("Len(buf) > MAX_BUFFER_SIZE. Cleaning data in message buffer.")
+                    else:
+                        message_buf.append(reading_data)
+                else:
+                    AppendString(reading_data)
         else:
             if not user_exit:
                 LOGGER.log("Server is dead. Function:"+ListenTCPSock.__name__, DEF.LOG_FILENAME)
@@ -344,7 +353,7 @@ def StartingEpoll(server, epoll_sock, window):
     epoll_sock.register(server.fileno(), select.EPOLLIN)
 
     try:
-        global connections, is_main, rooms, room_name
+        global connections, is_main, rooms, room_name, status, message_buf
         rooms[server.fileno()] = room_name
         while is_main:
             if not epoll_sock:
@@ -362,7 +371,7 @@ def StartingEpoll(server, epoll_sock, window):
                     reading_data = ReadData(conn)
                     rooms[conn.fileno()] = reading_data.strip()
                     LOGGER.log("Add client. Function:"+StartingEpoll.__name__, DEF.LOG_FILENAME)
-                    if rooms[conn.fileno()] == room_name:
+                    if rooms[conn.fileno()] == room_name and status == DEF.STATUS_FREE:
                         window.edt_chat.append(str("==>Один клиент подключился"))
                     MassMailing(str("==>Один клиент подключился"), rooms[fileno])
 
@@ -371,7 +380,7 @@ def StartingEpoll(server, epoll_sock, window):
                     reading_data = ReadData(connections[fileno])
                     if not reading_data:
                         epoll_sock.unregister(fileno)
-                        if room_name == rooms[fileno]:
+                        if room_name == rooms[fileno] and status == DEF.STATUS_FREE:
                             window.edt_chat.append(str("<==Один клиент отключился"))
                         MassMailing(str("<==Один клиент отключился"),rooms[fileno])
                         if fileno in list(connections.keys()):
@@ -385,7 +394,15 @@ def StartingEpoll(server, epoll_sock, window):
                         continue
                     # if room client and your room is equal
                     if rooms[server.fileno()] == rooms[fileno]:
-                        AppendString(reading_data)
+                        if DEF.BUF_FLAG == 1:
+                            if status == DEF.STATUS_BUSY:
+                                if len(message_buf) > DEF.MAX_BUFFER_SIZE:
+                                    message_buf.clear()
+                                    LOGGER.print_test("Len(buf) > MAX_BUFFER_SIZE. Cleaning data in message buffer.")
+                                else:
+                                    message_buf.append(reading_data)
+                            else:
+                                AppendString(reading_data)
                     MassMailing(reading_data, rooms[fileno])
 
     except error as e:
@@ -460,6 +477,7 @@ def SendMessageSlot(window, tcp_sock):
         else:
             WriteData(tcp_sock, message)
         window.edt_msg.clear()
+        window.edt_msg.setFocus()
 
 def CloseSlot():
     LOGGER.print_test("Exit clicked.")
@@ -472,7 +490,6 @@ def AppendString(msg):
     global user_name, window
     nickname = msg.split(':')[0]
     message = msg[len(nickname):]
-    LOGGER.print_test(nickname)
     if nickname == user_name:
         window.edt_chat.append(str("<font color="+DEF.MY_COLOR+"><b>"+nickname+"</b></font color="+DEF.MY_COLOR+">"+message))
     elif message:
@@ -481,11 +498,17 @@ def AppendString(msg):
         window.edt_chat.append(str(msg))
 
 def ChangeItemSlot():
-    global window
+    global window, message_buf, status
     pixmap = QtGui.QPixmap() # declare
     if window.cmb_status.currentIndex() == 0:
         pixmap = QtGui.QPixmap("status_ok.png")
+        status = DEF.STATUS_FREE
+        if DEF.BUF_FLAG == 1:
+            for i in range(len(message_buf)):
+                AppendString(message_buf[i])
+            message_buf.clear()
     else:
+        status = DEF.STATUS_BUSY
         pixmap = QtGui.QPixmap("status_bad.png")
 
     scaledPixmap = pixmap.scaled(window.lbl_color.width(), window.lbl_color.height(), QtCore.Qt.KeepAspectRatio)
@@ -493,7 +516,7 @@ def ChangeItemSlot():
 
 def AboutSlot():
     global window
-    QtGui.QMessageBox.about(window, "Информация", "Отказоустойчивый клиент обмена сообщениями.\nPython3 + PyQT")
+    QtGui.QMessageBox.about(window, "Информация", "Отказоустойчивый клиент обмена сообщениями.\nPython3 + PyQT4")
 #-------------------------------------------------------------------
 ####################################################################
 ####################################################################
@@ -513,6 +536,8 @@ if __name__=="__main__":
     is_main = False
     room_name = "friends"
     user_name = ""
+    status = DEF.STATUS_FREE
+    message_buf = []
     ####################################################################
     try:
         LOGGER.log("Now i kill you!", DEF.LOG_FILENAME)
@@ -523,6 +548,7 @@ if __name__=="__main__":
         window = uic.loadUi("gui.ui")
         window.setWindowIcon(QtGui.QIcon("icon.png"))
         pixmap = QtGui.QPixmap("status_ok.png")
+        status = DEF.STATUS_FREE
         scaledPixmap = pixmap.scaled(window.lbl_color.width(), window.lbl_color.height(), QtCore.Qt.KeepAspectRatio)
         window.lbl_color.setPixmap(scaledPixmap);
 

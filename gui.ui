@@ -191,7 +191,7 @@
     </item>
     <item>
      <property name="text">
-      <string>Недоступен</string>
+      <string>Не беспокоить</string>
      </property>
     </item>
    </widget>
