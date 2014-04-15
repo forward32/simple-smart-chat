@@ -153,7 +153,7 @@
    <widget class="QLabel" name="lbl_status">
     <property name="geometry">
      <rect>
-      <x>580</x>
+      <x>530</x>
       <y>0</y>
       <width>55</width>
       <height>27</height>
@@ -166,9 +166,9 @@
    <widget class="QComboBox" name="cmb_status">
     <property name="geometry">
      <rect>
-      <x>640</x>
+      <x>590</x>
       <y>0</y>
-      <width>111</width>
+      <width>161</width>
       <height>27</height>
      </rect>
     </property>

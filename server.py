@@ -174,15 +174,7 @@ def ListenTCPSock(fd, window):
         reading_data = ReadData(fd)
 
         if reading_data:
-            if DEF.BUF_FLAG == 1:
-                if status == DEF.STATUS_BUSY:
-                    if len(message_buf) > DEF.MAX_BUFFER_SIZE:
-                        message_buf.clear()
-                        LOGGER.print_test("Len(buf) > MAX_BUFFER_SIZE. Cleaning data in message buffer.")
-                    else:
-                        message_buf.append(reading_data)
-                else:
-                    AppendString(reading_data)
+            CheckBuf(reading_data)
         else:
             if not user_exit:
                 LOGGER.log("Server is dead. Function:"+ListenTCPSock.__name__, DEF.LOG_FILENAME)
@@ -259,8 +251,6 @@ def GetListOfRooms(fd):
                     break
                 else:
                     lst.append(reading_data)
-            # lst is available rooms on server
-            LOGGER.print_test(lst)
     except error as e:
         LOGGER.log("Error in function" + GetListOfRooms.__name__, "\nError:"+str(e), DEF.LOG_FILENAME)
 
@@ -371,17 +361,17 @@ def StartingEpoll(server, epoll_sock, window):
                     reading_data = ReadData(conn)
                     rooms[conn.fileno()] = reading_data.strip()
                     LOGGER.log("Add client. Function:"+StartingEpoll.__name__, DEF.LOG_FILENAME)
-                    if rooms[conn.fileno()] == room_name and status == DEF.STATUS_FREE:
-                        window.edt_chat.append(str("==>Один клиент подключился"))
-                    MassMailing(str("==>Один клиент подключился"), rooms[fileno])
+                    if rooms[conn.fileno()] == room_name:
+                        CheckBuf("==>Один клиент подключился")
+                    MassMailing("==>Один клиент подключился", rooms[fileno])
 
 
                 elif event & select.EPOLLIN:
                     reading_data = ReadData(connections[fileno])
                     if not reading_data:
                         epoll_sock.unregister(fileno)
-                        if room_name == rooms[fileno] and status == DEF.STATUS_FREE:
-                            window.edt_chat.append(str("<==Один клиент отключился"))
+                        if room_name == rooms[fileno]:
+                            CheckBuf("<==Один клиент отключился")
                         MassMailing(str("<==Один клиент отключился"),rooms[fileno])
                         if fileno in list(connections.keys()):
                             LOGGER.print_test("Cleaning after disconnecting.")
@@ -394,15 +384,7 @@ def StartingEpoll(server, epoll_sock, window):
                         continue
                     # if room client and your room is equal
                     if rooms[server.fileno()] == rooms[fileno]:
-                        if DEF.BUF_FLAG == 1:
-                            if status == DEF.STATUS_BUSY:
-                                if len(message_buf) > DEF.MAX_BUFFER_SIZE:
-                                    message_buf.clear()
-                                    LOGGER.print_test("Len(buf) > MAX_BUFFER_SIZE. Cleaning data in message buffer.")
-                                else:
-                                    message_buf.append(reading_data)
-                            else:
-                                AppendString(reading_data)
+                        CheckBuf(reading_data)
                     MassMailing(reading_data, rooms[fileno])
 
     except error as e:
@@ -443,6 +425,21 @@ def CompareDates(one_date, two_date):
 
     return
 
+def CheckBuf(msg):
+    """
+    This function call main client before output data in chat-textbox
+    """
+    global status, message_buf
+    if status == DEF.STATUS_FREE:
+        AppendString(msg)
+    else:
+        if DEF.BUF_FLAG == 1:
+            if len(message_buf) > DEF.MAX_BUFFER_SIZE:
+                message_buf.clear()
+                LOGGER.print_test("Len(buf) > MAX_BUFFER_SIZE. Cleaning data in message buffer.")
+            else:
+                message_buf.append(msg)
+
 def OnDeadProgram():
     """
     It is destructor for program.
@@ -471,7 +468,7 @@ def SendMessageSlot(window, tcp_sock):
             QtGui.QMessageBox.about(window, "Информация","Сообщение пустое.\nПожалуйста, введите сообщение в поле ввода и повторите попытку.")
         #--if you is main client--
         elif is_main:
-            AppendString(message)
+            CheckBuf(message)
             MassMailing(message, room_name)
         #--if you is not main client--
         else:
