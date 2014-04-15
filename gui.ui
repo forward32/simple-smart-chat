@@ -82,9 +82,9 @@
     <property name="geometry">
      <rect>
       <x>0</x>
-      <y>20</y>
+      <y>30</y>
       <width>811</width>
-      <height>391</height>
+      <height>371</height>
      </rect>
     </property>
    </widget>
@@ -143,11 +143,69 @@
       <x>10</x>
       <y>0</y>
       <width>131</width>
-      <height>17</height>
+      <height>31</height>
      </rect>
     </property>
     <property name="text">
      <string>Чат:</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="lbl_status">
+    <property name="geometry">
+     <rect>
+      <x>580</x>
+      <y>0</y>
+      <width>55</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Статус:</string>
+    </property>
+   </widget>
+   <widget class="QComboBox" name="cmb_status">
+    <property name="geometry">
+     <rect>
+      <x>640</x>
+      <y>0</y>
+      <width>111</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="editable">
+     <bool>false</bool>
+    </property>
+    <property name="currentIndex">
+     <number>0</number>
+    </property>
+    <property name="maxVisibleItems">
+     <number>2</number>
+    </property>
+    <property name="maxCount">
+     <number>5</number>
+    </property>
+    <item>
+     <property name="text">
+      <string>Доступен</string>
+     </property>
+    </item>
+    <item>
+     <property name="text">
+      <string>Недоступен</string>
+     </property>
+    </item>
+   </widget>
+   <widget class="QLabel" name="lbl_color">
+    <property name="geometry">
+     <rect>
+      <x>760</x>
+      <y>0</y>
+      <width>55</width>
+      <height>27</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
     </property>
    </widget>
   </widget>

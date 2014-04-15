@@ -362,12 +362,18 @@ def StartingEpoll(server, epoll_sock, window):
                     reading_data = ReadData(conn)
                     rooms[conn.fileno()] = reading_data.strip()
                     LOGGER.log("Add client. Function:"+StartingEpoll.__name__, DEF.LOG_FILENAME)
-                    window.edt_chat.append(str("==>Один клиент подключился"))
+                    if rooms[conn.fileno()] == room_name:
+                        window.edt_chat.append(str("==>Один клиент подключился"))
+                    MassMailing(str("==>Один клиент подключился"), rooms[fileno])
+
 
                 elif event & select.EPOLLIN:
                     reading_data = ReadData(connections[fileno])
                     if not reading_data:
                         epoll_sock.unregister(fileno)
+                        if room_name == rooms[fileno]:
+                            window.edt_chat.append(str("<==Один клиент отключился"))
+                        MassMailing(str("<==Один клиент отключился"),rooms[fileno])
                         if fileno in list(connections.keys()):
                             LOGGER.print_test("Cleaning after disconnecting.")
                             connections[fileno].shutdown(1)
@@ -376,13 +382,10 @@ def StartingEpoll(server, epoll_sock, window):
                         if fileno in list(rooms.keys()):
                             del rooms[fileno]
                         LOGGER.log("One client is disconnected. Function:" + StartingEpoll.__name__, DEF.LOG_FILENAME)
-                        window.edt_chat.append(str("<==Один клиент отключился"))
                         continue
                     # if room client and your room is equal
                     if rooms[server.fileno()] == rooms[fileno]:
                         AppendString(reading_data)
-                    else:
-                        LOGGER.print_test("Rooms not equal.")
                     MassMailing(reading_data, rooms[fileno])
 
     except error as e:
@@ -438,23 +441,25 @@ def OnDeadProgram():
         LOGGER.print_test("Cleaning finished.")
         exit(0)
     except error as e:
-        LOGGER.log("Warning in function" + OnDeadProgram.__name__+"\nWarning:"+str(e),DEF.LOG_FILENAME)
+        LOGGER.log("Warning in function " + OnDeadProgram.__name__+"\nWarning:"+str(e),DEF.LOG_FILENAME)
 
 
 #---------------------------User interface------------------
 def SendMessageSlot(window, tcp_sock):
     global room_name, user_name
-    message = user_name+": "+window.edt_msg.toPlainText()
-    if not message:
-        QtGui.QMessageBox.about(window, "Информация","Сообщение пустое.\nПожалуйста, введите сообщение в поле ввода и повторите попытку.")
-    #--if you is main client--
-    elif is_main:
-        AppendString(message)
-        MassMailing(message, room_name)
-    #--if you is not main client--
-    else:
-        WriteData(tcp_sock, message)
-    window.edt_msg.clear()
+    message = window.edt_msg.toPlainText()
+    if message:
+        message = user_name+": "+message
+        if not message:
+            QtGui.QMessageBox.about(window, "Информация","Сообщение пустое.\nПожалуйста, введите сообщение в поле ввода и повторите попытку.")
+        #--if you is main client--
+        elif is_main:
+            AppendString(message)
+            MassMailing(message, room_name)
+        #--if you is not main client--
+        else:
+            WriteData(tcp_sock, message)
+        window.edt_msg.clear()
 
 def CloseSlot():
     LOGGER.print_test("Exit clicked.")
@@ -467,15 +472,32 @@ def AppendString(msg):
     global user_name, window
     nickname = msg.split(':')[0]
     message = msg[len(nickname):]
+    LOGGER.print_test(nickname)
     if nickname == user_name:
         window.edt_chat.append(str("<font color="+DEF.MY_COLOR+"><b>"+nickname+"</b></font color="+DEF.MY_COLOR+">"+message))
-    else:
+    elif message:
          window.edt_chat.append(str("<font color="+DEF.OTHER_COLOR+"><b>"+nickname+"</b></font color="+DEF.OTHER_COLOR+">"+message))
+    else:
+        window.edt_chat.append(str(msg))
+
+def ChangeItemSlot():
+    global window
+    pixmap = QtGui.QPixmap() # declare
+    if window.cmb_status.currentIndex() == 0:
+        pixmap = QtGui.QPixmap("status_ok.png")
+    else:
+        pixmap = QtGui.QPixmap("status_bad.png")
+
+    scaledPixmap = pixmap.scaled(window.lbl_color.width(), window.lbl_color.height(), QtCore.Qt.KeepAspectRatio)
+    window.lbl_color.setPixmap(scaledPixmap);
+
+def AboutSlot():
+    global window
+    QtGui.QMessageBox.about(window, "Информация", "Отказоустойчивый клиент обмена сообщениями.\nPython3 + PyQT")
 #-------------------------------------------------------------------
 ####################################################################
 ####################################################################
 ####################################################################
-
 if __name__=="__main__":
     PARSER.ParseConfig("configuration.cfg")
     DEF.TraceDump()
@@ -499,11 +521,18 @@ if __name__=="__main__":
         #-- create ui here
         app = QtGui.QApplication(sys.argv)
         window = uic.loadUi("gui.ui")
+        window.setWindowIcon(QtGui.QIcon("icon.png"))
+        pixmap = QtGui.QPixmap("status_ok.png")
+        scaledPixmap = pixmap.scaled(window.lbl_color.width(), window.lbl_color.height(), QtCore.Qt.KeepAspectRatio)
+        window.lbl_color.setPixmap(scaledPixmap);
 
         window.edt_chat.setReadOnly(True)
         window.edt_msg.setFocus()
         window.btn_send.clicked.connect(lambda:SendMessageSlot(window, tcp_sock))
         window.btn_exit.clicked.connect(CloseSlot)
+        window.cmb_status.currentIndexChanged.connect(ChangeItemSlot)
+        window.action.triggered.connect(CloseSlot)
+        window.action_2.triggered.connect(AboutSlot)
 
         #--get nickname here--
         while not user_name:
