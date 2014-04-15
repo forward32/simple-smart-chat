@@ -1,16 +1,19 @@
-I am new to Python.
-It is my course project in university (BMSTU).
-It is chat, but not simple chat. In this chat the server part and the client part is the one application.
-So this chat has tricky work with network - there is the main server and other clients talking through it.
-If main server is dead then all clients try to become the main server. The youngest client will be the main server.
+Я новичек в Python.
+Это моя курсовая работа по специальности в МГТУ им. Н.Э. Баумана.
+Это приложение для обмена сообщениями - чат, но не обычный чат.
 
-So, in result, it will be anonymous*, because no one knows about other clients, and decentralized, because 
-if one server is dead new server will appear. 
+Обычный чат соединяется с сервером и работает через него, если сервер завершает работу -
+то и все клиенты не смогут работать. В данном приложении исключена такая возможность за
+счет динамического выбора сервера. Клиенты сами договариваются, кто будет главным
+клиентом(сервером) и через него взаимодействуют, а если главный завершаер работу - 
+остальные снова выбирют главного.
 
-Developed on Python3
+В результате такой работы в сети всегда будет сервер и взаимодействие будет продолжаться до
+тех пор, пока в сети есть хотя бы одно запущенное приложение.
+
+Разработано на Python3 и PyQT4.
+Тестировано на Ubuntu 13.04 + Python33 + PyQT4.
 
 
-
-
-____________________________
-*except the main server
+--------------
+yurockoyura@gmail.com 
