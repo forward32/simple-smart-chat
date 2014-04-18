@@ -21,6 +21,7 @@ STATUS_FREE = "Available"
 STATUS_BUSY = "Busy"
 BUF_FLAG = 1
 MAX_BUFFER_SIZE = 512
+MAX_TRYING_COUNT = 5
 
 def TraceDump():
     """

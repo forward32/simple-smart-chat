@@ -169,7 +169,7 @@ def ListenTCPSock(fd, window):
     """
     This function listen tcp socket fd and return old post.
     """
-    global tcp_sock, user_exit, udp_sock, is_main, status, message_buf
+    global tcp_sock, user_exit, udp_sock
     while not user_exit:
         reading_data = ReadData(fd)
 
@@ -260,40 +260,49 @@ def CaptureOfPower(_port, fd, window):
     fd - udp socket. _port - udp port.
     """
     try:
-        LOGGER.print_test("In capture of power.")
         stop_at = time.time() + DEF.BROADCAST_TIMEOUT
         global date_of_starting, tcp_sock, epoll_sock, is_main, server_addr, room_name
         tcp_sock.shutdown(1)
         tcp_sock.close()
         msg = DEF.CANDIDATE_MESSAGE+"MY_TIME="+date_of_starting
         is_not_main = False
-        # Trying to become the main client
-        while time.time() < stop_at:
-            SendBroadcast(msg, _port, fd)
-            lst = ListenUdpPort(_port)
-            if lst and DEF.CANDIDATE_MESSAGE in lst[0]:
-                    date = GetDateStructFromMessage(lst[0], "MY_TIME=", "#")
-                    # if it is younger
-                    if not CompareDates(date_of_starting, date):
-                        is_not_main = True
-                        break
-        # expect the main client
-        if is_not_main:
-            stop_at = time.time() + DEF.BROADCAST_TIMEOUT
+        count_trying = DEF.MAX_TRYING_COUNT
+
+        while count_trying > 0:
+            # Trying to become the main client
             while time.time() < stop_at:
+                SendBroadcast(msg, _port, fd)
                 lst = ListenUdpPort(_port)
-                if lst and lst[0]==DEF.SERVER_MESSAGE:
-                    server_addr = lst[1]
-                    tcp_sock = CreateTCPSockClient(DEF.TCP_PORT)
-                    tcp_sock.setblocking(True)
-                    tcp_sock.connect((server_addr[0], DEF.TCP_PORT))
-                    GetListOfRooms(tcp_sock) # this function get list of rooms from server
-                    WriteData(tcp_sock, room_name) # send room name to server
-                    LOGGER.print_test("Connected to the new main client.")
-                    thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock, window))
-                    thread_listener.start()
-                    LOGGER.print_test("Thread-listener started.")
-                    return False
+                if lst and DEF.CANDIDATE_MESSAGE in lst[0]:
+                        date = GetDateStructFromMessage(lst[0], "MY_TIME=", "#")
+                        # if it is younger
+                        if not CompareDates(date_of_starting, date):
+                            is_not_main = True
+                            break
+            # expect the main client
+            if is_not_main:
+                count_trying -= 1
+                stop_at = time.time() + DEF.BROADCAST_TIMEOUT
+                while time.time() < stop_at:
+                    lst = ListenUdpPort(_port)
+                    if lst and lst[0] == DEF.SERVER_MESSAGE:
+                        server_addr = lst[1]
+                        tcp_sock = CreateTCPSockClient(DEF.TCP_PORT)
+                        tcp_sock.setblocking(True)
+                        tcp_sock.connect((server_addr[0], DEF.TCP_PORT))
+                        GetListOfRooms(tcp_sock) # this function get list of rooms from server
+                        WriteData(tcp_sock, room_name) # send room name to server
+                        LOGGER.print_test("Connected to the new main client.")
+                        thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock, window))
+                        thread_listener.start()
+                        LOGGER.print_test("Thread-listener started.")
+                        return False
+            else:
+                break
+
+        if count_trying <= 0:
+            LOGGER.log("Two or more clients have equal data of starting.", DEF.LOG_FILENAME)
+            sys.exit(-1)
 
         # if here - you the main client
         is_main = True
@@ -343,7 +352,7 @@ def StartingEpoll(server, epoll_sock, window):
     epoll_sock.register(server.fileno(), select.EPOLLIN)
 
     try:
-        global connections, is_main, rooms, room_name, status, message_buf
+        global connections, is_main, rooms, room_name
         rooms[server.fileno()] = room_name
         while is_main:
             if not epoll_sock:
@@ -427,7 +436,7 @@ def CompareDates(one_date, two_date):
 
 def CheckBuf(msg):
     """
-    This function call main client before output data in chat-textbox
+    This function call before output data in chat-textbox
     """
     global status, message_buf
     if status == DEF.STATUS_FREE:
