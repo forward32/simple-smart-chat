@@ -472,7 +472,7 @@ def SendMessageSlot(window, tcp_sock):
     global room_name, user_name
     message = window.edt_msg.toPlainText()
     if message:
-        message = user_name+": "+message
+        message = user_name+":"+message
         if not message:
             QtGui.QMessageBox.about(window, "Информация","Сообщение пустое.\nПожалуйста, введите сообщение в поле ввода и повторите попытку.")
         #--if you is main client--
@@ -495,11 +495,13 @@ def CloseSlot():
 def AppendString(msg):
     global user_name, window
     nickname = msg.split(':')[0]
-    message = msg[len(nickname):]
+    message = msg[len(nickname)+1:]
     if nickname == user_name:
-        window.edt_chat.append(str("<font color="+DEF.MY_COLOR+"><b>"+nickname+"</b></font color="+DEF.MY_COLOR+">"+message))
+        window.edt_chat.append(str("<font color="+DEF.MY_COLOR+"><b>"+nickname+" написал:</b></font color="+DEF.MY_COLOR+">"))
+        window.edt_chat.append(str(message))
     elif message:
-         window.edt_chat.append(str("<font color="+DEF.OTHER_COLOR+"><b>"+nickname+"</b></font color="+DEF.OTHER_COLOR+">"+message))
+         window.edt_chat.append(str("<font color="+DEF.OTHER_COLOR+"><b>"+nickname+" написал:</b></font color="+DEF.OTHER_COLOR+">"))
+         window.edt_chat.append(str(message))
     else:
         window.edt_chat.append(str(msg))
 
