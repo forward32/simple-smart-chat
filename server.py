@@ -243,14 +243,17 @@ def GetListOfRooms(fd):
     """
     try:
         reading_data = ReadData(fd)
+        lst = []
         if reading_data == DEF.ROOMS_LIST_SEND_MESSAGE:
-            lst = []
             while True:
                 reading_data = ReadData(fd)
                 if not reading_data or reading_data == DEF.ROOMS_LIST_SEND_MESSAGE+"-END":
                     break
                 else:
                     lst.append(reading_data)
+
+        return lst
+
     except error as e:
         LOGGER.log("Error in function" + GetListOfRooms.__name__, "\nError:"+str(e), DEF.LOG_FILENAME)
 
@@ -290,8 +293,8 @@ def CaptureOfPower(_port, fd, window):
                         tcp_sock = CreateTCPSockClient(DEF.TCP_PORT)
                         tcp_sock.setblocking(True)
                         tcp_sock.connect((server_addr[0], DEF.TCP_PORT))
-                        GetListOfRooms(tcp_sock) # this function get list of rooms from server
-                        WriteData(tcp_sock, room_name) # send room name to server
+                        rooms_lst = GetListOfRooms(tcp_sock) # this function get list of rooms from server
+                        AddToRoomWindow(rooms_lst)
                         LOGGER.print_test("Connected to the new main client.")
                         thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock, window))
                         thread_listener.start()
@@ -334,8 +337,8 @@ def CheckWhoMainServer(_port, fd):
             if lst and lst[0]==DEF.SERVER_MESSAGE:
                 server_addr = lst[1]
                 tcp_sock.connect((server_addr[0], DEF.TCP_PORT))
-                GetListOfRooms(tcp_sock) # this function get list of rooms from server
-                WriteData(tcp_sock, room_name) # send room name to server
+                rooms_lst = GetListOfRooms(tcp_sock) # this function get list of rooms from server
+                AddToRoomWindow(rooms_lst)
                 return False
 
     except error as e:
@@ -384,7 +387,7 @@ def StartingEpoll(server, epoll_sock, window):
                         MassMailing(str("<==Один клиент отключился"),rooms[fileno])
                         if fileno in list(connections.keys()):
                             LOGGER.print_test("Cleaning after disconnecting.")
-                            connections[fileno].shutdown(1)
+                            #connections[fileno].shutdown(1)
                             connections[fileno].close()
                             del connections[fileno]
                         if fileno in list(rooms.keys()):
@@ -475,19 +478,20 @@ def SendMessageSlot(window, tcp_sock):
         message = user_name+":"+message
         if not message:
             QtGui.QMessageBox.about(window, "Информация","Сообщение пустое.\nПожалуйста, введите сообщение в поле ввода и повторите попытку.")
-        #--if you is main client--
+        # if you is main client--
         elif is_main:
             CheckBuf(message)
             MassMailing(message, room_name)
-        #--if you is not main client--
+        # if you is not main client--
         else:
             WriteData(tcp_sock, message)
         window.edt_msg.clear()
         window.edt_msg.setFocus()
 
 def CloseSlot():
-    LOGGER.print_test("Exit clicked.")
-    global user_exit, is_main
+    global user_exit, is_main, room_window, window
+    room_window.close()
+    window.close()
     user_exit = True
     is_main = False
     OnDeadProgram()
@@ -525,6 +529,53 @@ def ChangeItemSlot():
 def AboutSlot():
     global window
     QtGui.QMessageBox.about(window, "Информация", "Отказоустойчивый клиент обмена сообщениями.\nPython3 + PyQT4")
+
+def AddToRoomWindow(rooms_lst):
+    global room_window
+    for i in range(len(rooms_lst)):
+        room_window.cmb_rooms.addItem(str(rooms_lst[i]))
+
+def SelectRoomSlot(tcp_sock):
+    global room_name, room_window, window
+    room_name = room_window.cmb_rooms.currentText()
+    if not room_name:
+        QtGui.QMessageBox.about(window, "Информация", "Не выбрана комната.")
+    else:
+        if not is_main:
+            WriteData(tcp_sock, room_name)
+            # create tcp-socket-listener-thread
+            tcp_sock.setblocking(True)
+            thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock,window))
+            thread_listener.start()
+            LOGGER.print_test("Thread-listener started.")
+        else:
+            LOGGER.log("I main client", DEF.LOG_FILENAME)
+            # Create broadcast-thread
+            thread_broadcast = threading.Thread(target=MainServerBroadcast, args=(DEF.SERVER_MESSAGE, DEF.UDP_PORT, udp_sock))
+            thread_broadcast.start()
+            LOGGER.print_test("Thread-broadcast started.")
+            # Create epoll-listener-thread
+            tcp_sock.close()
+            tcp_sock = CreateTCPSockServer(DEF.TCP_PORT)
+            thread_epoll = threading.Thread(target=StartingEpoll, args=(tcp_sock, epoll_sock, window))
+            thread_epoll.start()
+            LOGGER.print_test("Thread-epoll started.")
+
+        room_window.close()
+        window.show()
+
+def AddRoomSlot():
+    global room_name, room_window
+    new_name = ""
+
+    while not new_name:
+        new_name, ok = QtGui.QInputDialog.getText(room_window, 'Добавление', 'Введите название комнаты:')
+        if not ok:
+            break
+
+    if new_name:
+        room_name = new_name
+        AddToRoomWindow([room_name])
 #-------------------------------------------------------------------
 ####################################################################
 ####################################################################
@@ -551,9 +602,9 @@ if __name__=="__main__":
         LOGGER.log("Now i kill you!", DEF.LOG_FILENAME)
         os.remove(DEF.LOG_FILENAME)
 
-        #-- create ui here
+        # create ui here
         app = QtGui.QApplication(sys.argv)
-        window = uic.loadUi("gui.ui")
+        window = uic.loadUi("gui.ui") # main window of application
         window.setWindowIcon(QtGui.QIcon("icon.png"))
         pixmap = QtGui.QPixmap("status_ok.png")
         status = DEF.STATUS_FREE
@@ -568,44 +619,34 @@ if __name__=="__main__":
         window.action.triggered.connect(CloseSlot)
         window.action_2.triggered.connect(AboutSlot)
 
-        #--get nickname here--
+        room_window = uic.loadUi("rooms.ui") # room-list window
+        room_window.setWindowIcon(QtGui.QIcon("icon.png"))
+        room_window.btn_accept.clicked.connect(lambda:SelectRoomSlot(tcp_sock))
+        room_window.btn_add.clicked.connect(AddRoomSlot)
+        room_window.btn_exit.clicked.connect(CloseSlot)
+        # set windows to center
+        geom = QtGui.QApplication.desktop().screenGeometry()
+        x = (geom.width()-room_window.width()) / 2
+        y = (geom.height()-room_window.height()) / 2
+        room_window.move(x,y)
+        x = (geom.width()-window.width()) / 2
+        y = (geom.height()-window.height()) / 2
+        window.move(x,y)
+
+        # get nickname here--
         while not user_name:
             user_name, ok = QtGui.QInputDialog.getText(window, 'Ввод ника', 'Введите ваше имя или прозвище:')
             if not ok:
                 sys.exit(0)
 
-        #--find main server(client)
+        # find main server(client)
         if CheckWhoMainServer(DEF.UDP_PORT, udp_sock):
             is_main = True
-            LOGGER.log("I main client", DEF.LOG_FILENAME)
-            # Create broadcast-thread
-            thread_broadcast = threading.Thread(target=MainServerBroadcast, args=(DEF.SERVER_MESSAGE, DEF.UDP_PORT, udp_sock))
-            thread_broadcast.start()
-            LOGGER.print_test("Thread-broadcast started.")
-            # Create epoll-listener-thread
-            tcp_sock.close()
-            tcp_sock = CreateTCPSockServer(DEF.TCP_PORT)
-            thread_epoll = threading.Thread(target=StartingEpoll, args=(tcp_sock, epoll_sock, window))
-            thread_epoll.start()
-            LOGGER.print_test("Thread-epoll started.")
-        else:
-            # create tcp-socket-listener-thread
-            tcp_sock.setblocking(True)
-            thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock,window))
-            thread_listener.start()
-            LOGGER.print_test("Thread-listener started.")
 
-        window.show()
+        room_window.show()
         sys.exit(app.exec_())
 
     except:
         user_exit = True
         is_main = False
-        LOGGER.print_test("Exit...")
         OnDeadProgram()
-
-
-
-
-
-
