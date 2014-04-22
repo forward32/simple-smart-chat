@@ -295,6 +295,7 @@ def CaptureOfPower(_port, fd, window):
                         tcp_sock.connect((server_addr[0], DEF.TCP_PORT))
                         rooms_lst = GetListOfRooms(tcp_sock) # this function get list of rooms from server
                         AddToRoomWindow(rooms_lst)
+                        WriteData(tcp_sock, room_name)
                         LOGGER.print_test("Connected to the new main client.")
                         thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock, window))
                         thread_listener.start()
