@@ -231,9 +231,14 @@ def SendListRooms(room_lst, client_sock):
     """
     This function sends to client list of available rooms.
     """
-    WriteData(client_sock, DEF.ROOMS_LIST_SEND_MESSAGE)
+    for_send_lst = []
     for i in room_lst:
-        WriteData(client_sock, room_lst[i])
+        if not room_lst[i] in for_send_lst:
+            for_send_lst.append(room_lst[i])
+
+    WriteData(client_sock, DEF.ROOMS_LIST_SEND_MESSAGE)
+    for i in range(len(for_send_lst)):
+        WriteData(client_sock, for_send_lst[i])
     WriteData(client_sock, DEF.ROOMS_LIST_SEND_MESSAGE+"-END")
 
 def GetListOfRooms(fd):
@@ -374,21 +379,13 @@ def StartingEpoll(server, epoll_sock, window):
                     reading_data = ReadData(conn)
                     rooms[conn.fileno()] = reading_data.strip()
                     LOGGER.log("Add client. Function:"+StartingEpoll.__name__, DEF.LOG_FILENAME)
-                    if rooms[conn.fileno()] == room_name:
-                        CheckBuf("==>Один клиент подключился")
-                    MassMailing("==>Один клиент подключился", rooms[fileno])
-
 
                 elif event & select.EPOLLIN:
                     reading_data = ReadData(connections[fileno])
                     if not reading_data:
                         epoll_sock.unregister(fileno)
-                        if room_name == rooms[fileno]:
-                            CheckBuf("<==Один клиент отключился")
-                        MassMailing(str("<==Один клиент отключился"),rooms[fileno])
                         if fileno in list(connections.keys()):
                             LOGGER.print_test("Cleaning after disconnecting.")
-                            #connections[fileno].shutdown(1)
                             connections[fileno].close()
                             del connections[fileno]
                         if fileno in list(rooms.keys()):
