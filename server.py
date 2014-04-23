@@ -413,6 +413,16 @@ def GetStartingTime():
     return (str(now_date.year)+"#"+str(now_date.month)+"#"+str(now_date.day)+"#"+
             str(now_time.hour)+"#"+str(now_time.minute)+"#"+str(now_time.second))
 
+def GetTimeForMessage():
+    """
+    This function return date and time for inserting into message.
+    """
+    now_date = datetime.date.today()
+    now_time = datetime.datetime.now()
+
+    return (str(now_date.year)+":"+str(now_date.month)+":"+str(now_date.day)+" "+
+            str(now_time.hour)+":"+str(now_time.minute)+":"+str(now_time.second))
+
 def GetDateStructFromMessage(message, sep_msg, sep_date):
     """
     This function return date(yyyy#mm#dd#hh#mm#ss) from message
@@ -467,13 +477,12 @@ def OnDeadProgram():
     except error as e:
         LOGGER.log("Warning in function " + OnDeadProgram.__name__+"\nWarning:"+str(e),DEF.LOG_FILENAME)
 
-
 #---------------------------User interface------------------
 def SendMessageSlot(window, tcp_sock):
     global room_name, user_name
     message = window.edt_msg.toPlainText()
     if message:
-        message = user_name+":"+message
+        message = GetTimeForMessage()+"#"+user_name+":"+message
         if not message:
             QtGui.QMessageBox.about(window, "Информация","Сообщение пустое.\nПожалуйста, введите сообщение в поле ввода и повторите попытку.")
         # if you is main client--
@@ -496,13 +505,15 @@ def CloseSlot():
 
 def AppendString(msg):
     global user_name, window
+    date_str = msg.split('#')[0]
+    msg = msg[len(date_str)+1:]
     nickname = msg.split(':')[0]
     message = msg[len(nickname)+1:]
     if nickname == user_name:
-        window.edt_chat.append(str("<font color="+DEF.MY_COLOR+"><b>"+nickname+" написал:</b></font color="+DEF.MY_COLOR+">"))
+        window.edt_chat.append(str("<font color="+DEF.MY_COLOR+"><b>"+"["+date_str+"] "+nickname+" написал:</b></font color="+DEF.MY_COLOR+">"))
         window.edt_chat.append(str(message))
     elif message:
-         window.edt_chat.append(str("<font color="+DEF.OTHER_COLOR+"><b>"+nickname+" написал:</b></font color="+DEF.OTHER_COLOR+">"))
+         window.edt_chat.append(str("<font color="+DEF.OTHER_COLOR+"><b>"+"["+date_str+"] "+nickname+" написал:</b></font color="+DEF.OTHER_COLOR+">"))
          window.edt_chat.append(str(message))
     else:
         window.edt_chat.append(str(msg))
@@ -560,7 +571,6 @@ def SelectRoomSlot(tcp_sock):
             LOGGER.print_test("Thread-epoll started.")
 
         room_window.close()
-        window.show()
 
 def AddRoomSlot():
     global room_name, room_window
@@ -602,6 +612,8 @@ if __name__=="__main__":
 
         # create ui here
         app = QtGui.QApplication(sys.argv)
+        tray = QtGui.QSystemTrayIcon(QtGui.QIcon("icon.png"), app)
+        tray.show()
         window = uic.loadUi("gui.ui") # main window of application
         window.setWindowIcon(QtGui.QIcon("icon.png"))
         pixmap = QtGui.QPixmap("status_ok.png")
@@ -641,6 +653,7 @@ if __name__=="__main__":
         if CheckWhoMainServer(DEF.UDP_PORT, udp_sock):
             is_main = True
 
+        window.show()
         room_window.show()
         sys.exit(app.exec_())
 
