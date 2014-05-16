@@ -23,7 +23,8 @@ def CreateUDPSock():
     """
     try:
         sock = socket(AF_INET, SOCK_DGRAM)
-        sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        #sock.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        sock.setsockopt(SOL_SOCKET, SO_REUSEPORT, 1)
         sock.setsockopt(SOL_SOCKET, SO_BROADCAST,1)
 
     except error as e:
@@ -276,7 +277,10 @@ def CaptureOfPower(_port, fd, window):
         is_not_main = False
         count_trying = DEF.MAX_TRYING_COUNT
 
+        LOGGER.print_test("Enter in cycle 1.")
+        LOGGER.print_test("My time = " + str(date_of_starting))
         while count_trying > 0:
+            LOGGER.print_test("Enter in cycle 2.")
             # Trying to become the main client
             while time.time() < stop_at:
                 SendBroadcast(msg, _port, fd)
@@ -284,13 +288,17 @@ def CaptureOfPower(_port, fd, window):
                 if lst and DEF.CANDIDATE_MESSAGE in lst[0]:
                         date = GetDateStructFromMessage(lst[0], "MY_TIME=", "#")
                         # if it is younger
+                        LOGGER.print_test("Candidate data = " + str(date))
                         if not CompareDates(date_of_starting, date):
+                            LOGGER.print_test("Main client found.")
                             is_not_main = True
                             break
+            LOGGER.print_test("Exit from 2 cycle.")
             # expect the main client
             if is_not_main:
                 count_trying -= 1
                 stop_at = time.time() + DEF.BROADCAST_TIMEOUT
+                LOGGER.print_test("Enter in cycle 3.")
                 while time.time() < stop_at:
                     lst = ListenUdpPort(_port)
                     if lst and lst[0] == DEF.SERVER_MESSAGE:
@@ -307,11 +315,12 @@ def CaptureOfPower(_port, fd, window):
                         LOGGER.print_test("Thread-listener started.")
                         return False
             else:
+                LOGGER.print_test("Exit from cycle 1.")
                 break
 
         if count_trying <= 0:
             LOGGER.log("Two or more clients have equal data of starting.", DEF.LOG_FILENAME)
-            sys.exit(-1)
+            OnDeadProgram()
 
         # if here - you the main client
         is_main = True
@@ -547,6 +556,7 @@ def AddToRoomWindow(rooms_lst):
 def SelectRoomSlot(tcp_sock):
     global room_name, room_window, window
     room_name = room_window.cmb_rooms.currentText()
+    window.lbl_room.setText(str("Комната: "+room_name))
     if not room_name:
         QtGui.QMessageBox.about(window, "Информация", "Не выбрана комната.")
     else:
@@ -601,7 +611,7 @@ if __name__=="__main__":
     user_exit = False
     date_of_starting = GetStartingTime()
     is_main = False
-    room_name = "friends"
+    room_name = ""
     user_name = ""
     status = DEF.STATUS_FREE
     message_buf = []
@@ -612,10 +622,10 @@ if __name__=="__main__":
 
         # create ui here
         app = QtGui.QApplication(sys.argv)
-        tray = QtGui.QSystemTrayIcon(QtGui.QIcon("icon.png"), app)
+        tray = QtGui.QSystemTrayIcon(QtGui.QIcon("chat.bmp"), app)
         tray.show()
         window = uic.loadUi("gui.ui") # main window of application
-        window.setWindowIcon(QtGui.QIcon("icon.png"))
+        window.setWindowIcon(QtGui.QIcon("chat.bmp"))
         pixmap = QtGui.QPixmap("status_ok.png")
         status = DEF.STATUS_FREE
         scaledPixmap = pixmap.scaled(window.lbl_color.width(), window.lbl_color.height(), QtCore.Qt.KeepAspectRatio)
@@ -630,7 +640,7 @@ if __name__=="__main__":
         window.action_2.triggered.connect(AboutSlot)
 
         room_window = uic.loadUi("rooms.ui") # room-list window
-        room_window.setWindowIcon(QtGui.QIcon("icon.png"))
+        room_window.setWindowIcon(QtGui.QIcon("chat.bmp"))
         room_window.btn_accept.clicked.connect(lambda:SelectRoomSlot(tcp_sock))
         room_window.btn_add.clicked.connect(AddRoomSlot)
         room_window.btn_exit.clicked.connect(CloseSlot)

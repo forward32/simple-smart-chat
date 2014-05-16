@@ -54,6 +54,8 @@ def ParseConfig(file_name):
             defines.OTHER_COLOR= str(dictionary[key])
         elif key.lower() == "buf_flag":
             defines.BUF_FLAG= int(dictionary[key])
+        elif key.lower() == "max_buffer_size":
+            defines.MAX_BUFFER_SIZE= int(dictionary[key])
 
 
 if __name__=="__main__":
