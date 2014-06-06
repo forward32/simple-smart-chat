@@ -277,10 +277,7 @@ def CaptureOfPower(_port, fd, window):
         is_not_main = False
         count_trying = DEF.MAX_TRYING_COUNT
 
-        LOGGER.print_test("Enter in cycle 1.")
-        LOGGER.print_test("My time = " + str(date_of_starting))
         while count_trying > 0:
-            LOGGER.print_test("Enter in cycle 2.")
             # Trying to become the main client
             while time.time() < stop_at:
                 SendBroadcast(msg, _port, fd)
@@ -288,17 +285,14 @@ def CaptureOfPower(_port, fd, window):
                 if lst and DEF.CANDIDATE_MESSAGE in lst[0]:
                         date = GetDateStructFromMessage(lst[0], "MY_TIME=", "#")
                         # if it is younger
-                        LOGGER.print_test("Candidate data = " + str(date))
                         if not CompareDates(date_of_starting, date):
                             LOGGER.print_test("Main client found.")
                             is_not_main = True
                             break
-            LOGGER.print_test("Exit from 2 cycle.")
             # expect the main client
             if is_not_main:
                 count_trying -= 1
                 stop_at = time.time() + DEF.BROADCAST_TIMEOUT
-                LOGGER.print_test("Enter in cycle 3.")
                 while time.time() < stop_at:
                     lst = ListenUdpPort(_port)
                     if lst and lst[0] == DEF.SERVER_MESSAGE:
@@ -309,13 +303,11 @@ def CaptureOfPower(_port, fd, window):
                         rooms_lst = GetListOfRooms(tcp_sock) # this function get list of rooms from server
                         AddToRoomWindow(rooms_lst)
                         WriteData(tcp_sock, room_name)
-                        LOGGER.print_test("Connected to the new main client.")
                         thread_listener = threading.Thread(target=ListenTCPSock, args=(tcp_sock, window))
                         thread_listener.start()
                         LOGGER.print_test("Thread-listener started.")
                         return False
             else:
-                LOGGER.print_test("Exit from cycle 1.")
                 break
 
         if count_trying <= 0:
