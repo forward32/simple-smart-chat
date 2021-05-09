@@ -1,19 +1,23 @@
 """
 This is main file of application
 """
-from socket import *
-import sys, os
-from imp import reload
-import simple_logger as LOGGER
-import defines as DEF
-reload(DEF)
-reload(LOGGER)
+import os
+import sys
 import time
 import datetime
 import select
 import threading
+
+from socket import *
+from PyQt5 import QtWidgets, QtGui, QtCore, uic
+
+import simple_logger as LOGGER
 import config_parser as PARSER
-from PyQt4 import QtCore, QtGui, uic
+import defines as DEF
+
+from importlib import reload
+reload(DEF)
+reload(LOGGER)
 ####################################################################
 ##########################LOGIC#####################################
 ####################################################################
@@ -198,7 +202,7 @@ def SendBroadcast(msg, _port, fd):
         LOGGER.log("Sendto failed. Function:" + SendBroadcast.__name__ + "\nError:" + str(e), DEF.LOG_FILENAME)
         if "Errno 101" in str(e):
             global window
-            QtGui.QMessageBox.about(window, "Информация", "Нет соединения с интернетом.")
+            QtWidgets.QMessageBox.about(window, "Информация", "Нет соединения с интернетом.")
             sys.exit(-1)
 
 def MainServerBroadcast(msg, _port, fd):
@@ -485,7 +489,7 @@ def SendMessageSlot(window, tcp_sock):
     if message:
         message = GetTimeForMessage()+"#"+user_name+":"+message
         if not message:
-            QtGui.QMessageBox.about(window, "Информация","Сообщение пустое.\nПожалуйста, введите сообщение в поле ввода и повторите попытку.")
+            QtWidgets.QMessageBox.about(window, "Информация","Сообщение пустое.\nПожалуйста, введите сообщение в поле ввода и повторите попытку.")
         # if you is main client--
         elif is_main:
             CheckBuf(message)
@@ -538,7 +542,7 @@ def ChangeItemSlot():
 
 def AboutSlot():
     global window
-    QtGui.QMessageBox.about(window, "Информация", "Отказоустойчивый клиент обмена сообщениями.\nPython3 + PyQT4")
+    QtWidgets.QMessageBox.about(window, "Информация", "Отказоустойчивый клиент обмена сообщениями.\nPython3 + PyQT5")
 
 def AddToRoomWindow(rooms_lst):
     global room_window
@@ -550,7 +554,7 @@ def SelectRoomSlot(tcp_sock):
     room_name = room_window.cmb_rooms.currentText()
     window.lbl_room.setText(str("Комната: "+room_name))
     if not room_name:
-        QtGui.QMessageBox.about(window, "Информация", "Не выбрана комната.")
+        QtWidgets.QMessageBox.about(window, "Информация", "Не выбрана комната.")
     else:
         if not is_main:
             WriteData(tcp_sock, room_name)
@@ -579,7 +583,7 @@ def AddRoomSlot():
     new_name = ""
 
     while not new_name:
-        new_name, ok = QtGui.QInputDialog.getText(room_window, 'Добавление', 'Введите название комнаты:')
+        new_name, ok = QtWidgets.QInputDialog.getText(room_window, 'Добавление', 'Введите название комнаты:')
         if not ok:
             break
 
@@ -613,8 +617,8 @@ if __name__=="__main__":
         os.remove(DEF.LOG_FILENAME)
 
         # create ui here
-        app = QtGui.QApplication(sys.argv)
-        tray = QtGui.QSystemTrayIcon(QtGui.QIcon("chat.bmp"), app)
+        app = QtWidgets.QApplication(sys.argv)
+        tray = QtWidgets.QSystemTrayIcon(QtGui.QIcon("chat.bmp"), app)
         tray.show()
         window = uic.loadUi("gui.ui") # main window of application
         window.setWindowIcon(QtGui.QIcon("chat.bmp"))
@@ -637,17 +641,17 @@ if __name__=="__main__":
         room_window.btn_add.clicked.connect(AddRoomSlot)
         room_window.btn_exit.clicked.connect(CloseSlot)
         # set windows to center
-        geom = QtGui.QApplication.desktop().screenGeometry()
+        geom = QtWidgets.QApplication.desktop().screenGeometry()
         x = (geom.width()-room_window.width()) / 2
         y = (geom.height()-room_window.height()) / 2
-        room_window.move(x,y)
+        room_window.move(int(x), int(y))
         x = (geom.width()-window.width()) / 2
         y = (geom.height()-window.height()) / 2
-        window.move(x,y)
+        window.move(int(x), int(y))
 
         # get nickname here--
         while not user_name:
-            user_name, ok = QtGui.QInputDialog.getText(window, 'Ввод ника', 'Введите ваше имя или прозвище:')
+            user_name, ok = QtWidgets.QInputDialog.getText(window, 'Ввод ника', 'Введите ваше имя или прозвище:')
             if not ok:
                 sys.exit(0)
 
